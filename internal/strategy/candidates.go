@@ -2,10 +2,11 @@ package strategy
 
 var Proven = []Params{
 	{Method: "multisplit", SplitPos: "1", Pattern: "4pda", SeqOvl: 568},
+	{Method: "multisplit", SeqOvl: 681, SplitPos: "1", Pattern: "google"},
 	{Method: "fake,multidisorder", SplitPos: "1,midsld", Repeats: 11, Fooling: "badseq", FakeTLS: "zero+mod"},
 	{Method: "fake", Repeats: 6, Fooling: "ts", FakeTLS: "stun+google"},
 	{Method: "fake,multisplit", SeqOvl: 681, SplitPos: "1", Fooling: "ts", Repeats: 8, Pattern: "google", FakeTLS: "mod:google"},
-	{Method: "multisplit", SeqOvl: 681, SplitPos: "1", Pattern: "google"},
+	{Method: "fake,multisplit", SeqOvl: 664, SplitPos: "1", Fooling: "ts", Repeats: 8, Pattern: "sferum", FakeTLS: "stun2+sferum"},
 	{Method: "fake,multisplit", Repeats: 6, Fooling: "badseq", BadseqInc: 1000, FakeTLS: "stun+google"},
 	{Method: "fake,fakedsplit", Repeats: 6, Fooling: "ts", FakeTLS: "stun+google"},
 	{Method: "fake,fakedsplit", SplitPos: "1", Fooling: "badseq", BadseqInc: 2, Repeats: 8, FakeTLS: "mod:google"},
@@ -13,11 +14,19 @@ var Proven = []Params{
 	{Method: "multisplit", SeqOvl: 652, SplitPos: "2", Pattern: "google"},
 	{Method: "multisplit", SplitPos: "2,sniext+1", SeqOvl: 679, Pattern: "google"},
 	{Method: "fake,multisplit", SeqOvl: 664, SplitPos: "1", Fooling: "ts", Repeats: 8, Pattern: "max", FakeTLS: "stun+max"},
+	{Method: "fake,multisplit", SeqOvl: 664, SplitPos: "1", Fooling: "ts", Repeats: 8, Pattern: "sferum", FakeTLS: "stun+sferum"},
+	{Method: "fake,multisplit", SeqOvl: 480, SplitPos: "1", Fooling: "ts", Repeats: 4, Pattern: "stun2", FakeTLS: "sferum"},
+	{Method: "hostfakesplit", Fooling: "ts", HostFake: "www.google.com"},
+	{Method: "fake,hostfakesplit", Fooling: "ts", FakeTLS: "mod:google", HostFake: "www.google.com"},
 	{Method: "fake,hostfakesplit", Fooling: "ts", FakeTLS: "mod:ya", HostFake: "ya.ru"},
+	{Method: "fake,hostfakesplit", Fooling: "ts", Repeats: 5, FakeTLS: "sochi+stun2", HostFake: "mail.ru"},
+	{Method: "hostfakesplit", Repeats: 4, Fooling: "ts", HostFake: "www.google.com"},
 	{Method: "hostfakesplit", Repeats: 4, Fooling: "ts,md5sig", HostFake: "ozon.ru"},
 	{Method: "fake", Repeats: 6, Fooling: "badseq", BadseqInc: 2, FakeTLS: "none"},
+	{Method: "fake", Repeats: 6, Fooling: "ts", FakeTLS: "stun2+sferum"},
 	{Method: "fake", Repeats: 6, Fooling: "ts", FakeTLS: "stun+4pda"},
 	{Method: "fake", Repeats: 6, Fooling: "badseq", BadseqInc: 2, FakeTLS: "stun+google"},
+	{Method: "fake", Repeats: 6, Fooling: "badseq", BadseqInc: 2, FakeTLS: "stun2+google"},
 	{Method: "fake", Repeats: 6, Fooling: "ts", FakeTLS: "stun+max"},
 	{Method: "syndata,multidisorder"},
 }
@@ -26,8 +35,8 @@ var (
 	methods  = []string{"fake,multisplit", "fake,multidisorder", "fake,fakedsplit", "fake,fakeddisorder", "multisplit", "multidisorder", "fake"}
 	foolings = []string{"ts", "badseq", "ts,md5sig", "md5sig"}
 	splitPos = []string{"1", "2", "1,midsld", "2,sniext+1", "midsld", "10"}
-	patterns = []string{"google", "max", "4pda"}
-	fakeTLS  = []string{"stun+google", "stun+max", "mod:google", "zero+mod", "mod:padencap", "mod:rndsni", "none"}
+	patterns = []string{"google", "max", "4pda", "sferum", "stun2"}
+	fakeTLS  = []string{"stun+google", "stun+max", "stun2+sferum", "stun+sferum", "stun2+google", "mod:google", "zero+mod", "mod:padencap", "mod:rndsni", "none"}
 	repeats  = []int{6, 8, 11}
 	ttls     = []string{"", "autottl=2", "autottl=3", "ttl=3", "ttl=4", "ttl=5"}
 	wssizes  = []string{"", "1:6"}

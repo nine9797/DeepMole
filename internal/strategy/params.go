@@ -19,15 +19,19 @@ type Params struct {
 	WSSize    string `json:"wssize,omitempty"`
 }
 
-var patternFiles = map[string]string{
+var fakeFiles = map[string]string{
 	"google": "tls_clienthello_www_google_com.bin",
 	"max":    "tls_clienthello_max_ru.bin",
 	"4pda":   "tls_clienthello_4pda_to.bin",
+	"sferum": "tls_clienthello_www_sferum_ru.bin",
+	"sochi":  "tls_clienthello_sochi_park.bin",
+	"stun":   "stun.bin",
+	"stun2":  "stun2.bin",
 }
 
-var patternOvl = map[string]int{"google": 681, "max": 664, "4pda": 568}
+var patternOvl = map[string]int{"google": 681, "max": 664, "4pda": 568, "sferum": 664, "stun2": 480}
 
-const httpFake = "tls_clienthello_max_ru.bin"
+var httpFakes = []string{"tls_clienthello_www_sferum_ru.bin", "tls_clienthello_max_ru.bin", "tls_clienthello_www_google_com.bin"}
 
 func (p Params) Key() string {
 	return fmt.Sprintf("%s|%s|%d|%s|%s|%d|%s|%d|%s|%s|%s",
@@ -78,7 +82,41 @@ func (p Params) hasSplit() bool {
 	return strings.Contains(p.Method, "multisplit") || strings.Contains(p.Method, "multidisorder") || strings.Contains(p.Method, "fakedsplit")
 }
 
-func (p Params) Render(bin string, withHTTP bool) []string {
+func (p Params) fakeTLSFiles() []string {
+	if !p.hasFake() || p.FakeTLS == "" || p.FakeTLS == "none" || strings.HasPrefix(p.FakeTLS, "mod:") || p.FakeTLS == "zero+mod" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(p.FakeTLS, "+") {
+		if f, ok := fakeFiles[part]; ok {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func (p Params) Files() []string {
+	var out []string
+	if p.SeqOvl > 0 && p.Pattern != "" {
+		out = append(out, fakeFiles[p.Pattern])
+	}
+	return append(out, p.fakeTLSFiles()...)
+}
+
+func (p Params) Available(paths Paths) bool {
+	if paths.Exists == nil {
+		return true
+	}
+	for _, f := range p.Files() {
+		if f == "" || !paths.Exists(paths.Bin+f) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p Params) Render(paths Paths, withHTTP bool) []string {
+	bin := paths.Bin
 	args := []string{"--dpi-desync=" + p.Method}
 	if p.WSSize != "" {
 		args = append(args, "--wssize="+p.WSSize)
@@ -106,7 +144,7 @@ func (p Params) Render(bin string, withHTTP bool) []string {
 		args = append(args, fmt.Sprintf("--dpi-desync-repeats=%d", p.Repeats))
 	}
 	if p.SeqOvl > 0 && p.Pattern != "" {
-		args = append(args, "--dpi-desync-split-seqovl-pattern="+bin+patternFiles[p.Pattern])
+		args = append(args, "--dpi-desync-split-seqovl-pattern="+bin+fakeFiles[p.Pattern])
 	}
 	if strings.Contains(p.Method, "fakedsplit") {
 		args = append(args, "--dpi-desync-fakedsplit-pattern=0x00")
@@ -120,12 +158,6 @@ func (p Params) Render(bin string, withHTTP bool) []string {
 	}
 	if p.hasFake() {
 		switch p.FakeTLS {
-		case "stun+google":
-			args = append(args, "--dpi-desync-fake-tls="+bin+"stun.bin", "--dpi-desync-fake-tls="+bin+patternFiles["google"])
-		case "stun+max":
-			args = append(args, "--dpi-desync-fake-tls="+bin+"stun.bin", "--dpi-desync-fake-tls="+bin+patternFiles["max"])
-		case "stun+4pda":
-			args = append(args, "--dpi-desync-fake-tls="+bin+"stun.bin", "--dpi-desync-fake-tls="+bin+patternFiles["4pda"])
 		case "mod:google":
 			args = append(args, "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com")
 		case "mod:ya":
@@ -138,9 +170,13 @@ func (p Params) Render(bin string, withHTTP bool) []string {
 			args = append(args, "--dpi-desync-fake-tls-mod=none")
 		case "zero+mod":
 			args = append(args, "--dpi-desync-fake-tls=0x00000000", "--dpi-desync-fake-tls=!", "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com")
+		default:
+			for _, f := range p.fakeTLSFiles() {
+				args = append(args, "--dpi-desync-fake-tls="+bin+f)
+			}
 		}
 		if withHTTP {
-			args = append(args, "--dpi-desync-fake-http="+bin+httpFake)
+			args = append(args, "--dpi-desync-fake-http="+paths.file(httpFakes...))
 		}
 	}
 	return args

@@ -119,7 +119,7 @@ func New(cfg Config) (*Engine, error) {
 	}
 	return &Engine{
 		cfg:     cfg,
-		paths:   strategy.Paths{Bin: bin, Lists: lists},
+		paths:   strategy.NewPaths(bin, lists),
 		run:     &runner.Runner{Exe: exe, Dir: bin},
 		st:      state.Load(cfg.StatePath),
 		targets: probe.Default(),
@@ -285,7 +285,7 @@ func (e *Engine) setup(ctx context.Context) {
 			}
 			e.emit(i18n.T("ev.cached_fail", scoreText(sc)))
 		} else {
-			e.emit(i18n.T("ev.start_fail", firstLine(err.Error())))
+			e.emit(i18n.T("ev.start_fail", errLine(err.Error())))
 		}
 		p := entry.Plan
 		e.search(ctx, &p)
@@ -349,6 +349,7 @@ func scoreText(sc map[string]probe.Score) string {
 type cursor struct {
 	queue []strategy.Params
 	tried map[string]bool
+	skip  func(strategy.Params) bool
 	cur   strategy.Params
 	best  strategy.Params
 	score float64
@@ -356,8 +357,8 @@ type cursor struct {
 	empty bool
 }
 
-func newCursor(seed *strategy.Params) *cursor {
-	c := &cursor{tried: map[string]bool{}}
+func newCursor(seed *strategy.Params, skip func(strategy.Params) bool) *cursor {
+	c := &cursor{tried: map[string]bool{}, skip: skip}
 	if seed != nil && !seed.IsZero() {
 		c.queue = append(c.queue, *seed)
 	}
@@ -374,6 +375,9 @@ func (c *cursor) next() bool {
 				continue
 			}
 			c.tried[p.Key()] = true
+			if c.skip != nil && c.skip(p) {
+				continue
+			}
 			c.cur = p
 			return true
 		}
@@ -419,10 +423,11 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 	if seed != nil {
 		sg, sn = &seed.Google, &seed.General
 	}
-	cs[probe.BlockGoogle] = newCursor(sg)
-	cs[probe.BlockGeneral] = newCursor(sn)
+	skip := func(p strategy.Params) bool { return !p.Available(e.paths) }
+	cs[probe.BlockGoogle] = newCursor(sg, skip)
+	cs[probe.BlockGeneral] = newCursor(sn, skip)
 
-	attempts := 0
+	attempts, startFails := 0, 0
 	for attempts < e.cfg.MaxCandidates {
 		if ctx.Err() != nil {
 			return
@@ -447,9 +452,20 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 		e.set(func(s *Status) { s.Progress = fmt.Sprintf("%d/%d", attempts, e.cfg.MaxCandidates) })
 		e.log.Printf("[%d] google=[%s] general=[%s]", attempts, plan.Google.Name(), plan.General.Name())
 		if err := e.apply(plan); err != nil {
-			e.emit(i18n.T("ev.cand_fail", attempts, firstLine(err.Error())))
+			startFails++
+			e.emit(i18n.T("ev.cand_fail", attempts, errLine(err.Error())))
+			if startFails >= 3 {
+				e.emit(i18n.T("ev.start_abort"))
+				e.set(func(s *Status) {
+					s.Phase = PhaseFailed
+					s.Progress = ""
+					s.Message = errLine(err.Error())
+				})
+				return
+			}
 			continue
 		}
+		startFails = 0
 		sc := e.probe(ctx, e.targets)
 		if sc[probe.BlockControl].OK == 0 {
 			e.set(func(s *Status) { s.Phase = PhaseOffline; s.Message = i18n.T("msg.internet_down") })
@@ -495,7 +511,7 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 	}
 	if e.applied == nil || e.applied.Google.Key() != final.Google.Key() || e.applied.General.Key() != final.General.Key() {
 		if err := e.apply(final); err != nil {
-			e.emit(i18n.T("ev.final_fail", firstLine(err.Error())))
+			e.emit(i18n.T("ev.final_fail", errLine(err.Error())))
 		}
 	}
 	if ok[probe.BlockGoogle] || ok[probe.BlockGeneral] {
@@ -544,7 +560,7 @@ func (e *Engine) watch(ctx context.Context) {
 		e.emit(i18n.T("ev.winws_down"))
 		if e.applied != nil {
 			if err := e.apply(*e.applied); err != nil {
-				e.emit(i18n.T("ev.restart_fail", firstLine(err.Error())))
+				e.emit(i18n.T("ev.restart_fail", errLine(err.Error())))
 			}
 		}
 		return
@@ -589,6 +605,21 @@ func partialText(ok map[string]bool) string {
 		}
 	}
 	return i18n.T("msg.not_working", strings.Join(bad, ", "))
+}
+
+func errLine(s string) string {
+	last := ""
+	for _, l := range strings.Split(s, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "github version") {
+			continue
+		}
+		last = l
+	}
+	if last == "" {
+		return strings.TrimSpace(firstLine(s))
+	}
+	return last
 }
 
 func firstLine(s string) string {

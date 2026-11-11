@@ -11,7 +11,7 @@ DeepMole removes the main pain of zapret: no more trying `general.bat`, `ALT`, `
 ## Features
 
 - Strategy search takes 10–40 seconds on a new network; a known strategy starts instantly.
-- 19 starting presets from the Flowseal bundle plus an in-house generator built on zapret parameters: desync methods, fooling, split-pos, seqovl patterns, fake TLS with modifiers, repeats, TTL and autottl, wssize. Together that is about one hundred thousand unique recipes, explored one parameter at a time from the best partially working variant.
+- 28 starting presets from the Flowseal bundle plus an in-house generator built on zapret parameters: desync methods, fooling, split-pos, seqovl patterns, fake TLS with modifiers, repeats, TTL and autottl, wssize. Together that is about one hundred thousand unique recipes, explored one parameter at a time from the best partially working variant.
 - Independent search for YouTube and Discord: if one service needs one method and the other needs another, both are combined into a single winws run.
 - Per-network memory: the fingerprint is built from the gateway, its MAC and the SSID, so the strategy is saved and brought up immediately on the next start.
 - Watchdog: checks key sites every minute and re-searches when the strategy breaks or the network changes.
@@ -71,7 +71,7 @@ Saved strategies live in `deepmole-state.json`.
 Go 1.22+ is required.
 
 ```powershell
-.\build.ps1 -Version 1.0.0
+.\build.ps1 -Version 1.0.1
 ```
 
 The script generates the icon, the exe resources (icon and a manifest requesting administrator rights) and builds `dist/deepmole.exe` (no console) and `dist/deepmole-cli.exe` (console output). `release.ps1` packs the zip archives, and with `-ZapretDir` also the full package and the installer (Inno Setup 6 required). GitHub releases are built automatically on `v*` tags.

@@ -132,10 +132,7 @@ func main() {
 }
 
 func runDry(cfg engine.Config) {
-	paths := strategy.Paths{
-		Bin:   filepath.Join(cfg.ZapretDir, "bin") + `\`,
-		Lists: filepath.Join(cfg.ZapretDir, "lists") + `\`,
-	}
+	paths := strategy.NewPaths(filepath.Join(cfg.ZapretDir, "bin")+`\`, filepath.Join(cfg.ZapretDir, "lists")+`\`)
 	plan := strategy.Plan{Google: strategy.Proven[0], General: strategy.Proven[0]}
 	fmt.Println("winws.exe " + strings.Join(strategy.BuildArgs(paths, plan, cfg.Game), " "))
 	n := netid.Current()
