@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,14 @@ type Result struct {
 	Bytes  int
 	Err    string
 	Millis int64
+	DoH    bool
+}
+
+func (r Result) Host() string {
+	if u, err := url.Parse(r.Target.URL); err == nil {
+		return u.Hostname()
+	}
+	return r.Target.URL
 }
 
 const (
@@ -46,13 +55,33 @@ func Default() []Target {
 
 const maxRead = 256 * 1024
 
-func newClient(timeout time.Duration) *http.Client {
+func newClient(timeout time.Duration, doh *bool) *http.Client {
+	d := &net.Dialer{Timeout: timeout}
 	tr := &http.Transport{
 		DisableKeepAlives:   true,
 		TLSHandshakeTimeout: timeout,
-		DialContext: (&net.Dialer{
-			Timeout: timeout,
-		}).DialContext,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil || net.ParseIP(host) != nil {
+				return d.DialContext(ctx, network, addr)
+			}
+			ips, viaDoH, err := resolve(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			if viaDoH {
+				*doh = true
+			}
+			var last error
+			for _, ip := range ips {
+				c, err := d.DialContext(ctx, network, net.JoinHostPort(ip, port))
+				if err == nil {
+					return c, nil
+				}
+				last = err
+			}
+			return nil, last
+		},
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 	return &http.Client{Transport: tr, Timeout: timeout}
@@ -72,7 +101,7 @@ func Check(ctx context.Context, t Target, timeout time.Duration) Result {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36")
 	req.Header.Set("Accept", "*/*")
 
-	client := newClient(timeout)
+	client := newClient(timeout, &res.DoH)
 	defer client.CloseIdleConnections()
 
 	resp, err := client.Do(req)

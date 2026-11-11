@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 
 	"deepmole/internal/engine"
+	"deepmole/internal/i18n"
 	"deepmole/internal/probe"
 	"deepmole/internal/raster"
 )
@@ -329,8 +330,18 @@ func serviceRows(th *theme, s engine.Status) []serviceRow {
 		}
 		return serviceRow{name: name, strat: strat, color: col}
 	}
+	dns := serviceRow{name: "DNS", strat: i18n.T("dns.system"), color: th.muted}
+	switch {
+	case !s.Enabled:
+		dns.strat, dns.color = "—", th.dis
+	case s.DNS == engine.DNSBlocked:
+		dns.strat, dns.color = i18n.T("dns.blocked"), th.err
+	case s.DNS != "":
+		dns.strat, dns.color = i18n.T("dns.secure", s.DNS), th.ok
+	}
 	return []serviceRow{
 		mk("YouTube", probe.BlockGoogle, s.Plan.Google.Name()),
 		mk("Discord", probe.BlockGeneral, s.Plan.General.Name()),
+		dns,
 	}
 }

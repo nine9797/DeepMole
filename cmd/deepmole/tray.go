@@ -49,7 +49,11 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 		btnToggle  = &button{th: &th, fonts: &fs, text: i18n.T("ui.disable"), enabled: true}
 		btnLog     = &button{th: &th, fonts: &fs, text: i18n.T("ui.log"), enabled: true}
 		autoToggle = &toggle{th: &th, on: autostartEnabled()}
+		dnsToggle  = &toggle{th: &th, on: true}
 	)
+	if eng != nil {
+		dnsToggle.on = eng.Status().SecureDNS
+	}
 	svc.rows = serviceRows(&th, engine.Status{Enabled: true})
 
 	demo := eng == nil
@@ -79,8 +83,8 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 		Title:      "DeepMole",
 		Icon:       icon,
 		Background: bgBrush,
-		Size:       Size{Width: 500, Height: 500},
-		MinSize:    Size{Width: 460, Height: 420},
+		Size:       Size{Width: 600, Height: 540},
+		MinSize:    Size{Width: 580, Height: 460},
 		Font:       Font{Family: "Segoe UI", PointSize: 10},
 		Layout:     VBox{Margins: Margins{Left: 20, Top: 16, Right: 20, Bottom: 16}, Spacing: 10},
 		Children: []Widget{
@@ -95,7 +99,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 			},
 			CustomWidget{AssignTo: &st.cw, Paint: st.paint, MinSize: Size{Height: 30}, MaxSize: Size{Height: 30}},
 			Label{AssignTo: &lNet, Text: i18n.T("ui.network", "…"), TextColor: wc(th.muted)},
-			CustomWidget{AssignTo: &svc.cw, Paint: svc.paint, MinSize: Size{Height: 80}, MaxSize: Size{Height: 80}},
+			CustomWidget{AssignTo: &svc.cw, Paint: svc.paint, MinSize: Size{Height: 114}, MaxSize: Size{Height: 114}},
 			TextEdit{AssignTo: &events, ReadOnly: true, VScroll: true, StretchFactor: 1, Background: SolidColorBrush{Color: wc(th.field)}, TextColor: wc(th.muted), Font: Font{Family: "Consolas", PointSize: 9}},
 			Composite{
 				Layout:  HBox{MarginsZero: true, Spacing: 8},
@@ -106,6 +110,8 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 					btn(btnToggle, 96),
 					btn(btnLog, 52),
 					HSpacer{},
+					Label{Text: i18n.T("ui.secure_dns"), TextColor: wc(th.muted), Font: Font{Family: "Segoe UI", PointSize: 9}},
+					CustomWidget{AssignTo: &dnsToggle.cw, Paint: dnsToggle.paint, MinSize: Size{Width: 44, Height: 24}, MaxSize: Size{Width: 44, Height: 24}},
 					Label{Text: i18n.T("ui.autostart"), TextColor: wc(th.muted), Font: Font{Family: "Segoe UI", PointSize: 9}},
 					CustomWidget{AssignTo: &autoToggle.cw, Paint: autoToggle.paint, MinSize: Size{Width: 44, Height: 24}, MaxSize: Size{Width: 44, Height: 24}},
 				},
@@ -120,6 +126,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	btnToggle.attach()
 	btnLog.attach()
 	autoToggle.attach()
+	dnsToggle.attach()
 
 	ni, err := walk.NewNotifyIcon(mw)
 	if err != nil {
@@ -164,6 +171,9 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	newAction(i18n.T("ui.open"), show)
 	aToggle := newAction(i18n.T("ui.disable_bypass"), btnToggle.onClick)
 	newAction(i18n.T("ui.research"), btnRe.onClick)
+	aDNS := newAction(i18n.T("ui.secure_dns"), nil)
+	aDNS.SetCheckable(true)
+	_ = aDNS.SetChecked(dnsToggle.on)
 	aAuto := newAction(i18n.T("ui.autostart"), nil)
 	aAuto.SetCheckable(true)
 	_ = aAuto.SetChecked(autoToggle.on)
@@ -182,6 +192,16 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	}
 	autoToggle.onChange = setAuto
 	aAuto.Triggered().Attach(func() { setAuto(!autoToggle.on) })
+
+	setDNS := func(on bool) {
+		dnsToggle.SetOn(on)
+		_ = aDNS.SetChecked(on)
+		if !demo {
+			eng.SetSecureDNS(on)
+		}
+	}
+	dnsToggle.onChange = setDNS
+	aDNS.Triggered().Attach(func() { setDNS(!dnsToggle.on) })
 
 	mw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
 		*canceled = true
@@ -208,6 +228,10 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 				_ = aToggle.SetText(i18n.T("ui.enable_bypass"))
 			}
 			btnRe.SetEnabled(s.Enabled && s.Phase != engine.PhaseSearching)
+			if dnsToggle.on != s.SecureDNS {
+				dnsToggle.SetOn(s.SecureDNS)
+				_ = aDNS.SetChecked(s.SecureDNS)
+			}
 		})
 	}
 	eng.OnEvent = func(msg string) {
@@ -218,7 +242,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 
 	if demo {
 		eng.OnChange(engine.Status{
-			Phase: engine.PhaseRunning, Network: "Home_5G", Enabled: true,
+			Phase: engine.PhaseRunning, Network: "Home_5G", Enabled: true, DNS: "Google DoH", SecureDNS: true,
 			Plan:   strategy.Plan{Google: strategy.Proven[3], General: strategy.Proven[1]},
 			Blocks: map[string]bool{probe.BlockGoogle: true, probe.BlockGeneral: true},
 		})

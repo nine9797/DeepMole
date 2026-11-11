@@ -31,6 +31,7 @@ type fileConfig struct {
 	ProbeTimeoutMs  int    `json:"probe_timeout_ms"`
 	WatchdogSeconds int    `json:"watchdog_interval_s"`
 	MaxCandidates   int    `json:"max_candidates"`
+	SecureDNS       string `json:"secure_dns"`
 	Language        string `json:"language"`
 }
 
@@ -90,6 +91,8 @@ func main() {
 		WatchdogInterval: time.Duration(fc.WatchdogSeconds) * time.Second,
 		MaxCandidates:    fc.MaxCandidates,
 		StatePath:        filepath.Join(dataDir, "deepmole-state.json"),
+		SecureDNS:        fc.SecureDNS,
+		DNSBackup:        filepath.Join(dataDir, "deepmole-dns.json"),
 		Log:              logger,
 	}
 
@@ -147,7 +150,13 @@ func runDry(cfg engine.Config) {
 		if !r.OK {
 			mark = "fail " + r.Err
 		}
+		if r.DoH {
+			mark += " (doh)"
+		}
 		fmt.Printf("%-8s %-55s %6dB %5dms %s\n", r.Target.Block, r.Target.URL, r.Bytes, r.Millis, mark)
+	}
+	if name, secure := probe.Fallback(); name != "" {
+		fmt.Printf("\nfallback resolver: %s doh=%v\n", name, secure)
 	}
 }
 

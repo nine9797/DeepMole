@@ -17,10 +17,24 @@ type Entry struct {
 }
 
 type State struct {
-	Networks map[string]Entry `json:"networks"`
+	Networks  map[string]Entry `json:"networks"`
+	SecureDNS string           `json:"secure_dns,omitempty"`
 
 	path string
 	mu   sync.Mutex
+}
+
+func (s *State) GetSecureDNS() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.SecureDNS
+}
+
+func (s *State) SetSecureDNS(v string) {
+	s.mu.Lock()
+	s.SecureDNS = v
+	s.mu.Unlock()
+	s.save()
 }
 
 func Load(path string) *State {

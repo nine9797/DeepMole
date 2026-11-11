@@ -95,6 +95,21 @@ var ru = map[string]string{
 	"ev.check_down":   "Проверка: интернет недоступен",
 	"ev.check_fail":   "Проверка: %s (сбой %d из 2)",
 
+	"ev.dns_blocked":      "DNS провайдера не отдаёт адрес %s, включаю защищённый DNS (%s)",
+	"ev.dns_blocked_off":  "DNS провайдера не отдаёт адрес %s. Включите защищённый DNS в браузере или уберите secure_dns=off в deepmole.json",
+	"ev.dns_on":           "Защищённый DNS включён: %s. Прежние настройки вернутся при выходе",
+	"ev.dns_fail":         "Не удалось включить защищённый DNS: %s",
+	"ev.dns_off":          "Настройки DNS восстановлены",
+	"ev.dns_restored":     "Восстановлены настройки DNS, оставшиеся с прошлого запуска",
+	"ev.dns_restore_fail": "Не удалось восстановить настройки DNS: %s",
+	"ev.dns_auto":         "Защищённый DNS: включится сам, если провайдер подменяет DNS",
+	"ev.dns_manual":       "Защищённый DNS выключен, настройки DNS не трогаются",
+	"ui.secure_dns":       "Защищённый DNS",
+
+	"dns.system":  "системный",
+	"dns.secure":  "защищённый, %s",
+	"dns.blocked": "подменяется провайдером",
+
 	"main.no_zapret": "Папка zapret не найдена. Положите bin/ и lists/ рядом с deepmole.exe или укажите zapret_dir в deepmole.json.",
 	"main.admin":     "Нужны права администратора: запустите консоль от имени администратора.",
 	"main.running":   "DeepMole уже запущен. Откройте его через значок в трее.",
@@ -154,6 +169,21 @@ var en = map[string]string{
 	"ev.restart_fail": "Restart failed: %s",
 	"ev.check_down":   "Check: internet unavailable",
 	"ev.check_fail":   "Check: %s (failure %d of 2)",
+
+	"ev.dns_blocked":      "The ISP's DNS gives no address for %s, enabling secure DNS (%s)",
+	"ev.dns_blocked_off":  "The ISP's DNS gives no address for %s. Enable secure DNS in the browser or remove secure_dns=off from deepmole.json",
+	"ev.dns_on":           "Secure DNS enabled: %s. Previous settings are restored on exit",
+	"ev.dns_fail":         "Failed to enable secure DNS: %s",
+	"ev.dns_off":          "DNS settings restored",
+	"ev.dns_restored":     "Restored DNS settings left over from the previous run",
+	"ev.dns_restore_fail": "Failed to restore DNS settings: %s",
+	"ev.dns_auto":         "Secure DNS: turns on by itself when the ISP hijacks DNS",
+	"ev.dns_manual":       "Secure DNS disabled, DNS settings are left untouched",
+	"ui.secure_dns":       "Secure DNS",
+
+	"dns.system":  "system",
+	"dns.secure":  "secure, %s",
+	"dns.blocked": "hijacked by the ISP",
 
 	"main.no_zapret": "zapret folder not found. Put bin/ and lists/ next to deepmole.exe or set zapret_dir in deepmole.json.",
 	"main.admin":     "Administrator rights are required: run the console as administrator.",

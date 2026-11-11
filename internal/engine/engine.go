@@ -15,6 +15,7 @@ import (
 	"deepmole/internal/netid"
 	"deepmole/internal/probe"
 	"deepmole/internal/runner"
+	"deepmole/internal/sdns"
 	"deepmole/internal/state"
 	"deepmole/internal/strategy"
 )
@@ -26,6 +27,8 @@ type Config struct {
 	WatchdogInterval time.Duration
 	MaxCandidates    int
 	StatePath        string
+	SecureDNS        string
+	DNSBackup        string
 	Log              *log.Logger
 }
 
@@ -42,14 +45,18 @@ const (
 )
 
 type Status struct {
-	Phase    Phase
-	Network  string
-	Plan     strategy.Plan
-	Blocks   map[string]bool
-	Progress string
-	Message  string
-	Enabled  bool
+	Phase     Phase
+	Network   string
+	Plan      strategy.Plan
+	Blocks    map[string]bool
+	Progress  string
+	Message   string
+	Enabled   bool
+	DNS       string
+	SecureDNS bool
 }
+
+const DNSBlocked = "blocked"
 
 func (s Status) Text() string {
 	switch s.Phase {
@@ -82,6 +89,8 @@ type Engine struct {
 	net      netid.Network
 	applied  *strategy.Plan
 	failures int
+	dns      string
+	dnsOff   bool
 	cmds     chan func(context.Context)
 
 	OnChange func(Status)
@@ -117,16 +126,43 @@ func New(cfg Config) (*Engine, error) {
 	if cfg.MaxCandidates == 0 {
 		cfg.MaxCandidates = 30
 	}
+	st := state.Load(cfg.StatePath)
+	mode := cfg.SecureDNS
+	if v := st.GetSecureDNS(); v != "" {
+		mode = v
+	}
+	dnsOff := strings.EqualFold(mode, "off") || cfg.DNSBackup == ""
 	return &Engine{
 		cfg:     cfg,
 		paths:   strategy.NewPaths(bin, lists),
 		run:     &runner.Runner{Exe: exe, Dir: bin},
-		st:      state.Load(cfg.StatePath),
+		st:      st,
 		targets: probe.Default(),
 		log:     cfg.Log,
-		status:  Status{Phase: PhaseIdle, Blocks: map[string]bool{}, Enabled: true},
+		status:  Status{Phase: PhaseIdle, Blocks: map[string]bool{}, Enabled: true, SecureDNS: !dnsOff},
+		dnsOff:  dnsOff,
 		cmds:    make(chan func(context.Context), 4),
 	}, nil
+}
+
+func (e *Engine) SetSecureDNS(on bool) {
+	e.post(func(ctx context.Context) {
+		if on {
+			e.st.SetSecureDNS("auto")
+			e.dnsOff = e.cfg.DNSBackup == ""
+			e.set(func(s *Status) { s.SecureDNS = true; s.DNS = "" })
+			e.emit(i18n.T("ev.dns_auto"))
+			if st := e.Status(); st.Enabled && (st.Phase == PhaseRunning || st.Phase == PhasePartial || st.Phase == PhaseFailed) {
+				e.probe(ctx, e.targets)
+			}
+			return
+		}
+		e.st.SetSecureDNS("off")
+		e.dnsOff = true
+		e.dnsRestore()
+		e.set(func(s *Status) { s.SecureDNS = false; s.DNS = "" })
+		e.emit(i18n.T("ev.dns_manual"))
+	})
 }
 
 func ensureUserLists(lists string) {
@@ -197,6 +233,7 @@ func (e *Engine) SetEnabled(on bool) {
 		}
 		e.run.Stop()
 		e.applied = nil
+		e.dnsRestore()
 		e.set(func(s *Status) {
 			s.Enabled = false
 			s.Phase = PhaseDisabled
@@ -210,9 +247,61 @@ func (e *Engine) SetEnabled(on bool) {
 func (e *Engine) Stop() {
 	e.run.Stop()
 	runner.KillStray()
+	e.dnsRestore()
+}
+
+func (e *Engine) dnsFix(host string) {
+	if e.dns != "" {
+		return
+	}
+	if e.dnsOff {
+		if e.Status().DNS != DNSBlocked {
+			e.set(func(s *Status) { s.DNS = DNSBlocked })
+			e.emit(i18n.T("ev.dns_blocked_off", host))
+		}
+		return
+	}
+	name, secure := probe.Fallback()
+	p := sdns.Find(name)
+	label := p.Name
+	if secure {
+		label += " DoH"
+	}
+	e.emit(i18n.T("ev.dns_blocked", host, label))
+	if err := sdns.Apply(p, e.cfg.DNSBackup, secure); err != nil {
+		e.dnsOff = true
+		e.set(func(s *Status) { s.DNS = DNSBlocked })
+		e.emit(i18n.T("ev.dns_fail", errLine(err.Error())))
+		return
+	}
+	e.dns = label
+	probe.ResetCache()
+	e.set(func(s *Status) { s.DNS = label })
+	e.emit(i18n.T("ev.dns_on", label))
+}
+
+func (e *Engine) dnsRestore() {
+	if e.dns == "" {
+		return
+	}
+	e.dns = ""
+	if err := sdns.Restore(e.cfg.DNSBackup); err != nil {
+		e.emit(i18n.T("ev.dns_restore_fail", errLine(err.Error())))
+	} else {
+		e.emit(i18n.T("ev.dns_off"))
+	}
+	probe.ResetCache()
+	e.set(func(s *Status) { s.DNS = "" })
 }
 
 func (e *Engine) Run(ctx context.Context) {
+	if e.cfg.DNSBackup != "" && sdns.Pending(e.cfg.DNSBackup) {
+		if err := sdns.Restore(e.cfg.DNSBackup); err != nil {
+			e.emit(i18n.T("ev.dns_restore_fail", errLine(err.Error())))
+		} else {
+			e.emit(i18n.T("ev.dns_restored"))
+		}
+	}
 	e.net = netid.Current()
 	e.setup(ctx)
 
@@ -323,12 +412,22 @@ func (e *Engine) probe(ctx context.Context, targets []probe.Target) map[string]p
 			}
 		}
 	}
+	dohHost := ""
 	for _, r := range res {
 		mark := "ok"
 		if !r.OK {
 			mark = "fail " + r.Err
 		}
+		if r.DoH {
+			mark += " (doh)"
+			if dohHost == "" && r.Target.Block != probe.BlockControl {
+				dohHost = r.Host()
+			}
+		}
 		e.log.Printf("  %-8s %-55s %6dB %5dms %s", r.Target.Block, r.Target.URL, r.Bytes, r.Millis, mark)
+	}
+	if dohHost != "" {
+		e.dnsFix(dohHost)
 	}
 	return sc
 }
@@ -348,14 +447,17 @@ func scoreText(sc map[string]probe.Score) string {
 
 type cursor struct {
 	queue []strategy.Params
+	seeds []strategy.Params
 	tried map[string]bool
 	skip  func(strategy.Params) bool
 	cur   strategy.Params
 	best  strategy.Params
 	score float64
 	done  bool
-	empty bool
+	deep  bool
 }
+
+const fallbackSeeds = 3
 
 func newCursor(seed *strategy.Params, skip func(strategy.Params) bool) *cursor {
 	c := &cursor{tried: map[string]bool{}, skip: skip}
@@ -363,6 +465,7 @@ func newCursor(seed *strategy.Params, skip func(strategy.Params) bool) *cursor {
 		c.queue = append(c.queue, *seed)
 	}
 	c.queue = append(c.queue, strategy.Proven...)
+	c.seeds = append(c.seeds, strategy.Proven[:fallbackSeeds]...)
 	return c
 }
 
@@ -381,18 +484,22 @@ func (c *cursor) next() bool {
 			c.cur = p
 			return true
 		}
-		if c.best.IsZero() || c.empty {
-			return false
+		c.deep = true
+		src := c.best
+		if src.IsZero() {
+			if len(c.seeds) == 0 {
+				return false
+			}
+			src, c.seeds = c.seeds[0], c.seeds[1:]
 		}
-		c.queue = strategy.Neighbors(c.best)
-		c.empty = true
-		for _, p := range c.queue {
+		fresh := false
+		for _, p := range strategy.Neighbors(src) {
 			if !c.tried[p.Key()] {
-				c.empty = false
-				break
+				fresh = true
+				c.queue = append(c.queue, p)
 			}
 		}
-		if c.empty {
+		if !fresh && !c.best.IsZero() {
 			return false
 		}
 	}
@@ -427,12 +534,16 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 	cs[probe.BlockGoogle] = newCursor(sg, skip)
 	cs[probe.BlockGeneral] = newCursor(sn, skip)
 
-	attempts, startFails := 0, 0
-	for attempts < e.cfg.MaxCandidates {
+	limit := len(strategy.Proven) + e.cfg.MaxCandidates
+	if seed != nil {
+		limit++
+	}
+	attempts, deep, startFails := 0, 0, 0
+	for {
 		if ctx.Err() != nil {
 			return
 		}
-		pending := 0
+		pending, isDeep := 0, false
 		for _, b := range blocks {
 			c := cs[b]
 			if c.done {
@@ -440,6 +551,7 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 			}
 			if c.next() {
 				pending++
+				isDeep = isDeep || c.deep
 			} else {
 				c.done = true
 			}
@@ -447,9 +559,15 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 		if pending == 0 {
 			break
 		}
+		if isDeep {
+			deep++
+			if deep > e.cfg.MaxCandidates {
+				break
+			}
+		}
 		plan := strategy.Plan{Google: cs[probe.BlockGoogle].pick(), General: cs[probe.BlockGeneral].pick()}
 		attempts++
-		e.set(func(s *Status) { s.Progress = fmt.Sprintf("%d/%d", attempts, e.cfg.MaxCandidates) })
+		e.set(func(s *Status) { s.Progress = fmt.Sprintf("%d/%d", attempts, limit) })
 		e.log.Printf("[%d] google=[%s] general=[%s]", attempts, plan.Google.Name(), plan.General.Name())
 		if err := e.apply(plan); err != nil {
 			startFails++
