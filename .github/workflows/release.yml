@@ -1,0 +1,61 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF -like "refs/tags/v*") { $env:GITHUB_REF.Substring(11) } else { "dev-" + $env:GITHUB_SHA.Substring(0, 7) }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Download zapret bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo Flowseal/zapret-discord-youtube --pattern "*.zip" --dir zapret-dl
+          $zip = Get-ChildItem zapret-dl -Filter *.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath zapret-src
+          $bin = Get-ChildItem zapret-src -Recurse -Filter winws.exe | Select-Object -First 1
+          "ZAPRET_DIR=$($bin.Directory.Parent.FullName)" >> $env:GITHUB_ENV
+
+      - name: Build and pack
+        shell: pwsh
+        run: .\release.ps1 -Version ${{ steps.ver.outputs.version }} -ZapretDir $env:ZAPRET_DIR
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeepMole-${{ steps.ver.outputs.version }}
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*-setup.exe
+            dist/*.zip
+          generate_release_notes: true

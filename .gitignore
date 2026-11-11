@@ -1,0 +1,8 @@
+dist/
+zapret/
+*.syso
+*.log
+deepmole-state.json
+deepmole.json
+assets/icon-32.png
+installer/Output/

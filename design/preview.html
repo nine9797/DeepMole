@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DeepMole Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --accent: #F0A030;
+  --bg: #FBFAF7;
+  --surface: #FFFFFF;
+  --fg: #1A1916;
+  --muted: #6B675E;
+  --line: #E4E0D6;
+  --ok: #2E9E5B;
+  --warn: #D98A14;
+  --err: #D64545;
+  --ink: #141414;
+  --paper: #FAFAF7;
+  --font: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --win: "Segoe UI Variable", "Segoe UI", "Inter", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161513;
+    --surface: #1F1E1B;
+    --fg: #ECE9E2;
+    --muted: #9B968B;
+    --line: #2E2C27;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161513;
+  --surface: #1F1E1B;
+  --fg: #ECE9E2;
+  --muted: #9B968B;
+  --line: #2E2C27;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 48px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow-x: hidden;
+}
+main { max-width: 1120px; margin: 0 auto; display: grid; gap: 72px; }
+h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; text-wrap: balance; }
+h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 20px; }
+p { margin: 0; max-width: 62ch; color: var(--muted); }
+header p { font-size: 15px; }
+.logos { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px 40px; }
+.logo { display: grid; gap: 10px; min-width: 0; }
+.logo h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.logo small { color: var(--muted); font-size: 13px; }
+.strip { display: flex; align-items: flex-end; gap: 24px; padding: 20px; border-radius: 6px; }
+.strip.light { background: #F3F3F3; border: 1px solid #DDDDDD; }
+.strip.dark { background: #202020; border: 1px solid #2E2E2E; }
+.strip svg { display: block; flex: none; }
+.s128 { width: 128px; height: 128px; }
+.s32 { width: 32px; height: 32px; }
+.s16 { width: 16px; height: 16px; }
+.palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+.swatch { display: grid; gap: 8px; min-width: 0; }
+.swatch .chip { height: 64px; border-radius: 6px; border: 1px solid var(--line); }
+.swatch b { font-weight: 500; font-size: 14px; }
+.swatch code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px 32px; }
+.mock { display: grid; gap: 12px; justify-items: start; min-width: 0; }
+.mock .cap { font-size: 13px; color: var(--muted); }
+.win {
+  width: 360px; height: 420px; max-width: 100%;
+  background: var(--w-bg); color: var(--w-fg);
+  font-family: var(--win); font-size: 13px; line-height: 1.4;
+  border: 1px solid var(--w-line); border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.theme-light { --w-bg: #F9F9F9; --w-fg: #1A1916; --w-muted: #6B675E; --w-line: #E1DED6; --w-field: #FFFFFF; --w-hover: #EFEDE7; }
+.theme-dark { --w-bg: #202020; --w-fg: #ECE9E2; --w-muted: #9B968B; --w-line: #3A3833; --w-field: #2B2A27; --w-hover: #33312D; }
+.w-title { display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px; font-weight: 600; font-size: 14px; }
+.w-title svg { width: 20px; height: 20px; }
+.w-title .ver { margin-left: auto; font-weight: 400; color: var(--w-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.w-body { padding: 4px 16px 0; display: grid; gap: 14px; flex: 1; align-content: start; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 10px; border-radius: 999px; font-weight: 600; font-size: 13px; width: fit-content; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.pill.err { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
+.kv { color: var(--w-muted); }
+.kv b { color: var(--w-fg); font-weight: 500; }
+.svc { display: grid; border-top: 1px solid var(--w-line); }
+.svc .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--w-line); }
+.svc .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.err { background: var(--err); }
+.svc .name { flex: 1; font-weight: 500; }
+.svc .strat { color: var(--w-muted); font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+.w-foot { display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--w-line); flex-wrap: wrap; }
+.btn { font: inherit; font-weight: 500; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--w-line); background: var(--w-field); color: var(--w-fg); cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #141414; }
+.toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--w-muted); font-size: 12px; }
+.toggle .sw { width: 34px; height: 18px; border-radius: 999px; background: var(--accent); position: relative; }
+.toggle .sw::after { content: ""; position: absolute; top: 3px; right: 3px; width: 12px; height: 12px; border-radius: 50%; background: #FAFAF7; }
+.big { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
+.big.ok { color: var(--ok); }
+.big.err { color: var(--err); }
+.big.warn { color: var(--warn); }
+.sum { color: var(--w-muted); }
+.menu { align-self: start; margin: 6px 0 0 auto; width: 200px; background: var(--w-field); border: 1px solid var(--w-line); border-radius: 8px; padding: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.12); display: grid; }
+.menu .mi { padding: 7px 10px; border-radius: 5px; display: flex; align-items: center; gap: 8px; }
+.menu .mi.hover { background: var(--w-hover); }
+.menu .mi.dim { color: var(--w-muted); }
+.menu .mi .chk { margin-left: auto; }
+.menu hr { border: 0; border-top: 1px solid var(--w-line); margin: 4px 6px; }
+.states { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="peek" viewBox="0 0 256 256">
+  <defs><clipPath id="hole_peek"><ellipse cx="128" cy="150" rx="88" ry="36"/></clipPath></defs>
+  <rect width="256" height="256" rx="56" ry="56" fill="#F0A030"/>
+  <ellipse cx="128" cy="150" rx="100" ry="46" fill="#141414"/>
+  <ellipse cx="128" cy="150" rx="88" ry="36" fill="#FAFAF7"/>
+  <ellipse cx="128" cy="165" rx="92" ry="38" fill="#141414" clip-path="url(#hole_peek)"/>
+  <circle cx="110" cy="160" r="12" fill="#141414" stroke="#FAFAF7" stroke-width="6"/>
+  <circle cx="146" cy="160" r="12" fill="#141414" stroke="#FAFAF7" stroke-width="6"/>
+  </symbol>
+</svg>
+
+<main>
+  <header>
+    <h1>DeepMole</h1>
+    <p>Знак, палитра и два макета окна статуса для трей-утилиты, которая подбирает и держит рабочую стратегию обхода DPI.</p>
+  </header>
+
+  <section>
+    <h2>Знак, 128 / 32 / 16 px</h2>
+    <div class="logos">
+      <div class="logo">
+        <h3>Peek <small>logo-peek.svg</small></h3>
+        <div class="strip light">
+          <svg class="s128"><use href="#peek"/></svg><svg class="s32"><use href="#peek"/></svg><svg class="s16"><use href="#peek"/></svg>
+        </div>
+        <div class="strip dark">
+          <svg class="s128"><use href="#peek"/></svg><svg class="s32"><use href="#peek"/></svg><svg class="s16"><use href="#peek"/></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Палитра</h2>
+    <div class="palette">
+      <div class="swatch"><div class="chip" style="background:#F0A030"></div><b>Акцент</b><code>#F0A030</code></div>
+      <div class="swatch"><div class="chip" style="background:#FBFAF7"></div><b>Фон, светлая</b><code>#FBFAF7</code></div>
+      <div class="swatch"><div class="chip" style="background:#161513"></div><b>Фон, тёмная</b><code>#161513</code></div>
+      <div class="swatch"><div class="chip" style="background:#1A1916"></div><b>Текст, светлая</b><code>#1A1916</code></div>
+      <div class="swatch"><div class="chip" style="background:#ECE9E2"></div><b>Текст, тёмная</b><code>#ECE9E2</code></div>
+      <div class="swatch"><div class="chip" style="background:#2E9E5B"></div><b>Успех</b><code>#2E9E5B</code></div>
+      <div class="swatch"><div class="chip" style="background:#D98A14"></div><b>Предупреждение</b><code>#D98A14</code></div>
+      <div class="swatch"><div class="chip" style="background:#D64545"></div><b>Ошибка</b><code>#D64545</code></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Состояния статуса</h2>
+    <div class="states">
+      <span class="pill ok">Работает</span>
+      <span class="pill warn">Подбор стратегии…</span>
+      <span class="pill err">Нет обхода</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Макет A «Карточка», 360 × 420</h2>
+    <div class="mocks">
+      <div class="mock">
+        <div class="win theme-light">
+          <div class="w-title"><svg><use href="#peek"/></svg>DeepMole<span class="ver">1.0.0</span></div>
+          <div class="w-body">
+            <span class="pill ok">Работает</span>
+            <div class="kv">Сеть: <b>Дом_5G</b></div>
+            <div class="svc">
+              <div class="row"><span class="dot ok"></span><span class="name">YouTube</span><span class="strat">fake+multisplit</span></div>
+              <div class="row"><span class="dot ok"></span><span class="name">Discord</span><span class="strat">fake+multidisorder</span></div>
+              <div class="row"><span class="dot ok"></span><span class="name">Общий</span><span class="strat">syndata</span></div>
+            </div>
+          </div>
+          <div class="w-foot">
+            <button class="btn primary" type="button">Переподобрать</button>
+            <button class="btn" type="button">Лог</button>
+            <span class="toggle">Автозапуск<span class="sw"></span></span>
+          </div>
+        </div>
+        <div class="cap">Светлая тема · состояние «Работает»</div>
+      </div>
+      <div class="mock">
+        <div class="win theme-dark">
+          <div class="w-title"><svg><use href="#peek"/></svg>DeepMole<span class="ver">1.0.0</span></div>
+          <div class="w-body">
+            <span class="pill warn">Подбор стратегии…</span>
+            <div class="kv">Сеть: <b>Кафе_Guest</b></div>
+            <div class="svc">
+              <div class="row"><span class="dot ok"></span><span class="name">YouTube</span><span class="strat">fake+multisplit</span></div>
+              <div class="row"><span class="dot warn"></span><span class="name">Discord</span><span class="strat">проверка 4/12</span></div>
+              <div class="row"><span class="dot err"></span><span class="name">Общий</span><span class="strat">—</span></div>
+            </div>
+          </div>
+          <div class="w-foot">
+            <button class="btn primary" type="button">Переподобрать</button>
+            <button class="btn" type="button">Лог</button>
+            <span class="toggle">Автозапуск<span class="sw"></span></span>
+          </div>
+        </div>
+        <div class="cap">Тёмная тема · состояние «Подбор стратегии…»</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Макет B «Строка», 360 × 420</h2>
+    <div class="mocks">
+      <div class="mock">
+        <div class="win theme-light">
+          <div class="w-title"><svg><use href="#peek"/></svg>DeepMole</div>
+          <div class="w-body">
+            <div class="big ok">Работает</div>
+            <div class="sum">Дом_5G · fake+multisplit · 3 из 3 сервисов</div>
+            <div class="menu">
+              <div class="mi dim">Работает · Дом_5G</div>
+              <hr>
+              <div class="mi hover">Переподобрать</div>
+              <div class="mi">Автозапуск<span class="chk">✓</span></div>
+              <div class="mi">Открыть лог</div>
+              <hr>
+              <div class="mi">Выход</div>
+            </div>
+          </div>
+        </div>
+        <div class="cap">Светлая тема · меню из трея</div>
+      </div>
+      <div class="mock">
+        <div class="win theme-dark">
+          <div class="w-title"><svg><use href="#peek"/></svg>DeepMole</div>
+          <div class="w-body">
+            <div class="big err">Нет обхода</div>
+            <div class="sum">Офис_WiFi · стратегия не найдена · повтор через 2 мин</div>
+            <div class="menu">
+              <div class="mi dim">Нет обхода · Офис_WiFi</div>
+              <hr>
+              <div class="mi hover">Переподобрать</div>
+              <div class="mi">Автозапуск<span class="chk">✓</span></div>
+              <div class="mi">Открыть лог</div>
+              <hr>
+              <div class="mi">Выход</div>
+            </div>
+          </div>
+        </div>
+        <div class="cap">Тёмная тема · меню из трея</div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

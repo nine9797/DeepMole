@@ -1,0 +1,8 @@
+{
+  "zapret_dir": "zapret",
+  "game_filter": "off",
+  "probe_timeout_ms": 3000,
+  "watchdog_interval_s": 60,
+  "max_candidates": 30,
+  "language": ""
+}

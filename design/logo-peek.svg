@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs><clipPath id="hole"><ellipse cx="128" cy="150" rx="88" ry="36"/></clipPath></defs>
+  <rect width="256" height="256" rx="56" ry="56" fill="#F0A030"/>
+  <ellipse cx="128" cy="150" rx="100" ry="46" fill="#141414"/>
+  <ellipse cx="128" cy="150" rx="88" ry="36" fill="#FAFAF7"/>
+  <ellipse cx="128" cy="165" rx="92" ry="38" fill="#141414" clip-path="url(#hole)"/>
+  <circle cx="110" cy="160" r="12" fill="#141414" stroke="#FAFAF7" stroke-width="6"/>
+  <circle cx="146" cy="160" r="12" fill="#141414" stroke="#FAFAF7" stroke-width="6"/>
+</svg>
