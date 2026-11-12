@@ -4,5 +4,7 @@
   "probe_timeout_ms": 3000,
   "watchdog_interval_s": 60,
   "max_candidates": 30,
+  "secure_dns": "auto",
+  "auto_update": "ask",
   "language": ""
 }

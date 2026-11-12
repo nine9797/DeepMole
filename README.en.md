@@ -17,7 +17,7 @@ DeepMole removes the main pain of zapret: no more trying `general.bat`, `ALT`, `
 - Per-network memory: the fingerprint is built from the gateway, its MAC and the SSID, so the strategy is saved and brought up immediately on the next start.
 - Watchdog: checks key sites every minute and re-searches when the strategy breaks or the network changes.
 - Status window with a search journal, tray icon, buttons "Re-search", "Disable", "Autostart".
-- winws is guaranteed to stop on exit, even if DeepMole is killed.
+- winws is guaranteed to stop on exit, even if DeepMole is killed, and the WinDivert driver is unloaded from the system.
 
 ## Installation
 
@@ -40,11 +40,12 @@ The program asks for administrator rights at start: the WinDivert driver needs t
   "watchdog_interval_s": 60,
   "max_candidates": 30,
   "secure_dns": "auto",
+  "auto_update": "ask",
   "language": ""
 }
 ```
 
-`game_filter` accepts `off`, `tcp`, `udp`, `all` and enables the bypass for ports 1024–65535, like Game Filter in the Flowseal bundle. `max_candidates` limits the variations tried after the presets: all 28 presets are always checked, then at most that many neighbouring recipes. `secure_dns` accepts `auto` and `off`; the same switch is in the window and the tray menu, and the choice made there is remembered. `language` accepts `ru` or `en`; when empty, the Windows display language is used.
+`game_filter` accepts `off`, `tcp`, `udp`, `all` and enables the bypass for ports 1024–65535, like Game Filter in the Flowseal bundle. `max_candidates` limits the variations tried after the presets: all 28 presets are always checked, then at most that many neighbouring recipes. `secure_dns` accepts `auto` and `off`; the same switch is in the window and the tray menu, and the choice made there is remembered. `auto_update` accepts `ask` (prompt when a new version appears), `auto` (install right away) and `off` (manual only, from the tray menu). `language` accepts `ru` or `en`; when empty, the Windows display language is used.
 
 Stop other zapret instances, GoodbyeDPI and similar tools before running, otherwise the checks will give wrong results.
 
@@ -70,12 +71,16 @@ A status window opens on start: bypass state, current network, strategies for Yo
 
 Saved strategies and the DNS switch live in `deepmole-state.json`; a backup of the DNS settings is kept in `deepmole-dns.json` while they are changed. If the program is killed before restoring them, it restores them on the next start.
 
+## Updates
+
+On start and once a day the program fetches the latest GitHub release and compares it with the running version. When a newer one exists, an "Update to …" button appears in the window and the same item in the tray menu; in `ask` mode a prompt is shown as well, in `auto` mode the update is installed right away. The installer or lite archive is downloaded only from github.com/nine9797/DeepMole and verified against SHA256 from the release's `SHA256SUMS`. An installed copy is updated by a silent install that restarts the program; a portable copy replaces `deepmole.exe` and `deepmole-cli.exe` after exit. "Check for updates" in the tray works even with `auto_update: "off"`.
+
 ## Building from source
 
 Go 1.22+ is required.
 
 ```powershell
-.\build.ps1 -Version 1.0.2
+.\build.ps1 -Version 1.0.3
 ```
 
 The script generates the icon, the exe resources (icon and a manifest requesting administrator rights) and builds `dist/deepmole.exe` (no console) and `dist/deepmole-cli.exe` (console output). `release.ps1` packs the zip archives, and with `-ZapretDir` also the full package and the installer (Inno Setup 6 required). GitHub releases are built automatically on `v*` tags.

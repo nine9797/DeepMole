@@ -87,6 +87,11 @@ func newClient(timeout time.Duration, doh *bool) *http.Client {
 	return &http.Client{Transport: tr, Timeout: timeout}
 }
 
+func Client(timeout time.Duration) *http.Client {
+	var doh bool
+	return newClient(timeout, &doh)
+}
+
 func Check(ctx context.Context, t Target, timeout time.Duration) Result {
 	start := time.Now()
 	res := Result{Target: t}

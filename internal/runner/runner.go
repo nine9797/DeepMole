@@ -73,6 +73,16 @@ func KillStray() {
 	_ = cmd.Run()
 }
 
+func UnloadDriver() {
+	for _, name := range []string{"WinDivert", "WinDivert14"} {
+		for _, verb := range []string{"stop", "delete"} {
+			cmd := exec.Command("sc", verb, name)
+			hidden(cmd)
+			_ = cmd.Run()
+		}
+	}
+}
+
 func (r *Runner) Start(args []string) error {
 	r.Stop()
 	KillStray()

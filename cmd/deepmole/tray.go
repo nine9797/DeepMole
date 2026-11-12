@@ -18,6 +18,7 @@ import (
 	"deepmole/internal/engine"
 	"deepmole/internal/probe"
 	"deepmole/internal/strategy"
+	"deepmole/internal/update"
 )
 
 const taskName = "DeepMole"
@@ -32,7 +33,7 @@ func loadIcon() *walk.Icon {
 	return ic
 }
 
-func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine, logPath, exe string) {
+func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine, logPath, exe, autoUpdate string) {
 	th := detectTheme()
 	fs := loadFonts()
 	icon := loadIcon()
@@ -48,6 +49,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 		btnRe      = &button{th: &th, fonts: &fs, text: i18n.T("ui.research"), primary: true, enabled: true}
 		btnToggle  = &button{th: &th, fonts: &fs, text: i18n.T("ui.disable"), enabled: true}
 		btnLog     = &button{th: &th, fonts: &fs, text: i18n.T("ui.log"), enabled: true}
+		btnUp      = &button{th: &th, fonts: &fs, text: "", primary: true, enabled: true}
 		autoToggle = &toggle{th: &th, on: autostartEnabled()}
 		dnsToggle  = &toggle{th: &th, on: true}
 	)
@@ -94,6 +96,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 					CustomWidget{AssignTo: &lg.cw, Paint: lg.paint, MinSize: Size{Width: 22, Height: 22}, MaxSize: Size{Width: 22, Height: 22}},
 					Label{Text: "DeepMole", Font: Font{Family: "Segoe UI", PointSize: 11, Bold: true}, TextColor: wc(th.fg)},
 					HSpacer{},
+					CustomWidget{AssignTo: &btnUp.cw, Paint: btnUp.paint, Visible: false, MinSize: Size{Width: 150, Height: 28}, MaxSize: Size{Width: 150, Height: 28}},
 					Label{Text: version, Font: Font{Family: "Segoe UI", PointSize: 9}, TextColor: wc(th.muted)},
 				},
 			},
@@ -127,6 +130,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	btnLog.attach()
 	autoToggle.attach()
 	dnsToggle.attach()
+	btnUp.attach()
 
 	ni, err := walk.NewNotifyIcon(mw)
 	if err != nil {
@@ -178,9 +182,30 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	aAuto.SetCheckable(true)
 	_ = aAuto.SetChecked(autoToggle.on)
 	newAction(i18n.T("ui.open_log"), btnLog.onClick)
+	aUpdate := newAction(i18n.T("ui.update_check"), nil)
 	_ = ni.ContextMenu().Actions().Add(walk.NewSeparatorAction())
 	newAction(i18n.T("ui.quit"), quit)
 	_ = ni.SetVisible(true)
+
+	up := &updater{mode: autoUpdate, current: version, exe: exe, mw: mw, quit: quit}
+	up.event = func(msg string) { events.AppendText(time.Now().Format("15:04:05") + "  " + msg + "\r\n") }
+	up.found = func(r *update.Release) {
+		btnUp.SetText(i18n.T("ui.update_btn", r.Version))
+		btnUp.cw.SetVisible(true)
+		_ = aUpdate.SetText(i18n.T("ui.update_btn", r.Version))
+	}
+	btnUp.onClick = up.install
+	aUpdate.Triggered().Attach(func() {
+		if up.rel != nil {
+			up.install()
+			return
+		}
+		go up.check(true)
+	})
+	if demo {
+		aUpdate.SetEnabled(false)
+	}
+	up.start()
 
 	setAuto := func(on bool) {
 		if err := setAutostart(exe, on); err != nil {

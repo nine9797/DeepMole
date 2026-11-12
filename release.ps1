@@ -48,3 +48,8 @@ if ($ZapretDir -and (Test-Path (Join-Path $ZapretDir "bin\winws.exe"))) {
 }
 
 Remove-Item $stage -Recurse -Force
+
+$sums = Get-ChildItem dist -File | Where-Object { $_.Name -like "DeepMole-$Version-*" } |
+    ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+[IO.File]::WriteAllText((Join-Path $PSScriptRoot "dist\SHA256SUMS"), (($sums -join "`n") + "`n"))
+Write-Host "checksums: dist/SHA256SUMS"

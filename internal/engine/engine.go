@@ -232,6 +232,7 @@ func (e *Engine) SetEnabled(on bool) {
 			return
 		}
 		e.run.Stop()
+		runner.UnloadDriver()
 		e.applied = nil
 		e.dnsRestore()
 		e.set(func(s *Status) {
@@ -247,6 +248,7 @@ func (e *Engine) SetEnabled(on bool) {
 func (e *Engine) Stop() {
 	e.run.Stop()
 	runner.KillStray()
+	runner.UnloadDriver()
 	e.dnsRestore()
 }
 

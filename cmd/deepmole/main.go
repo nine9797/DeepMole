@@ -32,6 +32,7 @@ type fileConfig struct {
 	WatchdogSeconds int    `json:"watchdog_interval_s"`
 	MaxCandidates   int    `json:"max_candidates"`
 	SecureDNS       string `json:"secure_dns"`
+	AutoUpdate      string `json:"auto_update"`
 	Language        string `json:"language"`
 }
 
@@ -60,7 +61,7 @@ func main() {
 	}
 	i18n.Init(fc.Language)
 	if *ui {
-		runTray(context.Background(), func() {}, nil, "", "")
+		runTray(context.Background(), func() {}, nil, "", "", "off")
 		return
 	}
 	if *zapret != "" {
@@ -131,7 +132,7 @@ func main() {
 		return
 	}
 
-	runTray(ctx, cancel, eng, logPath, exe)
+	runTray(ctx, cancel, eng, logPath, exe, updateMode(fc.AutoUpdate))
 }
 
 func runDry(cfg engine.Config) {
