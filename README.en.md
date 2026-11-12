@@ -124,6 +124,15 @@ Team roles:
 
 Privacy: the program does not transfer any information to other networked systems except the requests listed in [PRIVACY.md](PRIVACY.md); all of them are needed for its function and can be disabled in the settings.
 
+## Windows refuses to run the installer
+
+The builds are not signed with a certificate yet, so Windows does not know the publisher. Two dialogs are possible:
+
+- **SmartScreen** ("Windows protected your PC"): click "More info", then "Run anyway". It is a warning, not a block.
+- **Smart App Control** ("This app has been blocked", "the app may be untrusted", error 4551 from the installer): it cannot be bypassed. Turn it off in "Windows Security → App & browser control → Smart App Control → Off". It can only be re-enabled by reinstalling Windows, by Microsoft's design.
+
+To check whether Smart App Control is on, run in PowerShell: `(Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy).VerifiedAndReputablePolicyState` (1 on, 2 evaluation mode, 0 off). Signed builds will appear once the SignPath Foundation application is approved, see the code signing policy below.
+
 ## Antivirus
 
 WinDivert may be flagged by antivirus software as a potentially unwanted program. It is a traffic interception driver; the bypass does not work without it. Add the folder to the exclusions.
