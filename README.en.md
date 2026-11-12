@@ -93,7 +93,7 @@ On start and once a day the program fetches the latest GitHub release and compar
 Go 1.22+ is required.
 
 ```powershell
-.\build.ps1 -Version 1.0.4
+.\build.ps1 -Version 1.0.5
 ```
 
 The script generates the icon, the exe resources (icon and a manifest requesting administrator rights) and builds `dist/deepmole.exe` (no console) and `dist/deepmole-cli.exe` (console output). `release.ps1` packs the zip archives, and with `-ZapretDir` also the full package and the installer (Inno Setup 6 required). GitHub releases are built automatically on `v*` tags.

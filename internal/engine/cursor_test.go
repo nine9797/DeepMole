@@ -38,22 +38,17 @@ func TestCursorPresetsThenNeighbors(t *testing.T) {
 	}
 }
 
-func TestCursorSeedsWithoutBest(t *testing.T) {
+func TestCursorNoNeighborsWithoutBest(t *testing.T) {
 	c := newCursor("google", nil, nil)
-	for c.next() && !c.deep {
-	}
-	if !c.deep {
-		t.Fatal("no fallback neighbors without a partial result")
-	}
-	seen := map[string]bool{c.cur.Key(): true}
+	n := 0
 	for c.next() {
-		if seen[c.cur.Key()] {
-			t.Fatal("candidate repeated")
+		if c.deep {
+			t.Fatal("neighbors generated without a partial result")
 		}
-		seen[c.cur.Key()] = true
+		n++
 	}
-	if len(seen) < 2*fallbackSeeds {
-		t.Fatalf("expected neighbors of %d seeds, got %d", fallbackSeeds, len(seen))
+	if n != len(strategy.Proven) {
+		t.Fatalf("expected %d presets, got %d", len(strategy.Proven), n)
 	}
 }
 

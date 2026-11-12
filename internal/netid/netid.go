@@ -17,6 +17,12 @@ type Network struct {
 	ID      string
 	Name    string
 	Gateway string
+	MAC     string
+	SSID    string
+}
+
+func (n Network) Same(o Network) bool {
+	return n.Gateway != "" && n.Gateway == o.Gateway && n.SSID == o.SSID && (n.MAC == "" || o.MAC == "" || n.MAC == o.MAC)
 }
 
 func run(name string, args ...string) string {
@@ -80,5 +86,5 @@ func Current() Network {
 	if name == "" {
 		name = i18n.T("net.lan", gw)
 	}
-	return Network{ID: hex.EncodeToString(h[:])[:10], Name: name, Gateway: gw}
+	return Network{ID: hex.EncodeToString(h[:])[:10], Name: name, Gateway: gw, MAC: m, SSID: s}
 }

@@ -62,8 +62,14 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	if demo {
 		eng = &engine.Engine{}
 	}
+	searching := false
 	btnRe.onClick = func() {
-		if !demo {
+		if demo {
+			return
+		}
+		if searching {
+			eng.StopSearch()
+		} else {
 			eng.Research()
 		}
 	}
@@ -252,7 +258,13 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 				btnToggle.SetText(i18n.T("ui.enable"))
 				_ = aToggle.SetText(i18n.T("ui.enable_bypass"))
 			}
-			btnRe.SetEnabled(s.Enabled && s.Phase != engine.PhaseSearching)
+			searching = s.Phase == engine.PhaseSearching
+			if searching {
+				btnRe.SetText(i18n.T("ui.stop"))
+			} else {
+				btnRe.SetText(i18n.T("ui.research"))
+			}
+			btnRe.SetEnabled(s.Enabled)
 			if dnsToggle.on != s.SecureDNS {
 				dnsToggle.SetOn(s.SecureDNS)
 				_ = aDNS.SetChecked(s.SecureDNS)

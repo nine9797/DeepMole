@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"deepmole/internal/netid"
@@ -91,7 +92,8 @@ type Engine struct {
 	applied  *strategy.Plan
 	failures int
 	dns      string
-	dnsOff   bool
+	dnsOff   atomic.Bool
+	stopSrch context.CancelFunc
 	cmds     chan func(context.Context)
 
 	OnChange func(Status)
@@ -150,7 +152,7 @@ func New(cfg Config) (*Engine, error) {
 		mode = v
 	}
 	dnsOff := strings.EqualFold(mode, "off") || cfg.DNSBackup == ""
-	return &Engine{
+	e := &Engine{
 		cfg:     cfg,
 		paths:   strategy.NewPaths(bin, lists),
 		run:     &runner.Runner{Exe: exe, Dir: bin},
@@ -158,29 +160,44 @@ func New(cfg Config) (*Engine, error) {
 		targets: targets,
 		log:     cfg.Log,
 		status:  Status{Phase: PhaseIdle, Blocks: map[string]bool{}, Enabled: true, SecureDNS: !dnsOff},
-		dnsOff:  dnsOff,
 		cmds:    make(chan func(context.Context), 4),
-	}, nil
+	}
+	e.dnsOff.Store(dnsOff)
+	return e, nil
 }
 
 func (e *Engine) SetSecureDNS(on bool) {
+	if on {
+		e.st.SetSecureDNS("auto")
+		e.dnsOff.Store(e.cfg.DNSBackup == "")
+	} else {
+		e.st.SetSecureDNS("off")
+		e.dnsOff.Store(true)
+	}
+	e.set(func(s *Status) { s.SecureDNS = on; s.DNS = "" })
+	if on {
+		e.emit(i18n.T("ev.dns_auto"))
+	} else {
+		e.emit(i18n.T("ev.dns_manual"))
+	}
 	e.post(func(ctx context.Context) {
-		if on {
-			e.st.SetSecureDNS("auto")
-			e.dnsOff = e.cfg.DNSBackup == ""
-			e.set(func(s *Status) { s.SecureDNS = true; s.DNS = "" })
-			e.emit(i18n.T("ev.dns_auto"))
-			if st := e.Status(); st.Enabled && (st.Phase == PhaseRunning || st.Phase == PhasePartial || st.Phase == PhaseFailed) {
-				e.probe(ctx, e.targets)
-			}
+		if !on {
+			e.dnsRestore()
 			return
 		}
-		e.st.SetSecureDNS("off")
-		e.dnsOff = true
-		e.dnsRestore()
-		e.set(func(s *Status) { s.SecureDNS = false; s.DNS = "" })
-		e.emit(i18n.T("ev.dns_manual"))
+		if st := e.Status(); st.Enabled && (st.Phase == PhaseRunning || st.Phase == PhasePartial || st.Phase == PhaseFailed) {
+			e.probe(ctx, e.targets)
+		}
 	})
+}
+
+func (e *Engine) StopSearch() {
+	e.mu.Lock()
+	c := e.stopSrch
+	e.mu.Unlock()
+	if c != nil {
+		c()
+	}
 }
 
 func ensureUserLists(lists string) {
@@ -276,7 +293,7 @@ func (e *Engine) dnsFix(host string) {
 	if e.dns != "" {
 		return
 	}
-	if e.dnsOff {
+	if e.dnsOff.Load() {
 		if e.Status().DNS != DNSBlocked {
 			e.set(func(s *Status) { s.DNS = DNSBlocked })
 			e.emit(i18n.T("ev.dns_blocked_off", host))
@@ -325,7 +342,7 @@ func (e *Engine) dnsFix(host string) {
 		e.emit(i18n.T("ev.dns_on", label))
 		return
 	}
-	e.dnsOff = true
+	e.dnsOff.Store(true)
 	probe.ResetCache()
 	e.set(func(s *Status) { s.DNS = DNSBlocked })
 	if lastErr == nil {
@@ -381,7 +398,7 @@ func (e *Engine) Run(ctx context.Context) {
 			fn(ctx)
 		case <-netTick.C:
 			n := netid.Current()
-			if n.ID != e.net.ID {
+			if n.ID != e.net.ID && !n.Same(e.net) {
 				e.emit(i18n.T("ev.net_changed", n.Name))
 				e.net = n
 				e.failures = 0
@@ -512,7 +529,6 @@ func scoreText(sc map[string]probe.Score) string {
 
 type cursor struct {
 	queue []strategy.Params
-	seeds []strategy.Params
 	tried map[string]bool
 	skip  func(strategy.Params) bool
 	cur   strategy.Params
@@ -522,16 +538,12 @@ type cursor struct {
 	deep  bool
 }
 
-const fallbackSeeds = 3
-
 func newCursor(block string, seed *strategy.Params, skip func(strategy.Params) bool) *cursor {
 	c := &cursor{tried: map[string]bool{}, skip: skip}
 	if seed != nil && !seed.IsZero() {
 		c.queue = append(c.queue, *seed)
 	}
-	list := seeds[block]
-	c.queue = append(c.queue, list...)
-	c.seeds = append(c.seeds, list[:fallbackSeeds]...)
+	c.queue = append(c.queue, seeds[block]...)
 	return c
 }
 
@@ -570,22 +582,18 @@ func (c *cursor) next() bool {
 			c.cur = p
 			return true
 		}
-		c.deep = true
-		src := c.best
-		if src.IsZero() {
-			if len(c.seeds) == 0 {
-				return false
-			}
-			src, c.seeds = c.seeds[0], c.seeds[1:]
+		if c.best.IsZero() {
+			return false
 		}
+		c.deep = true
 		fresh := false
-		for _, p := range strategy.Neighbors(src) {
+		for _, p := range strategy.Neighbors(c.best) {
 			if !c.tried[p.Key()] {
 				fresh = true
 				c.queue = append(c.queue, p)
 			}
 		}
-		if !fresh && !c.best.IsZero() {
+		if !fresh {
 			return false
 		}
 	}
@@ -600,6 +608,16 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 		s.Blocks = map[string]bool{}
 	})
 	started := time.Now()
+	sctx, cancel := context.WithCancel(ctx)
+	e.mu.Lock()
+	e.stopSrch = cancel
+	e.mu.Unlock()
+	defer func() {
+		cancel()
+		e.mu.Lock()
+		e.stopSrch = nil
+		e.mu.Unlock()
+	}()
 
 	cs := map[string]*cursor{}
 	skip := func(p strategy.Params) bool { return !p.Available(e.paths) }
@@ -616,9 +634,14 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 		limit++
 	}
 	attempts, deep, startFails := 0, 0, 0
+	stopped := false
 	for {
 		if ctx.Err() != nil {
 			return
+		}
+		if sctx.Err() != nil {
+			stopped = true
+			break
 		}
 		pending, isDeep := 0, false
 		for _, b := range blocks {
@@ -664,7 +687,11 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 			continue
 		}
 		startFails = 0
-		sc := e.probe(ctx, e.targets)
+		sc := e.probe(sctx, e.targets)
+		if sctx.Err() != nil {
+			stopped = true
+			break
+		}
 		if sc[probe.BlockControl].OK == 0 {
 			e.set(func(s *Status) { s.Phase = PhaseOffline; s.Message = i18n.T("msg.internet_down") })
 			e.emit(i18n.T("ev.control_down"))
@@ -687,6 +714,14 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 			parts = append(parts, fmt.Sprintf("%s %d/%d %s [%s]", blockTitle[b], s.OK, s.Total, mark, c.cur.Name()))
 		}
 		e.emit(i18n.T("ev.cand", attempts, strings.Join(parts, "; ")))
+		found, sofar := map[string]bool{}, strategy.Plan{}
+		for _, b := range blocks {
+			if cs[b].done && cs[b].score >= 1 {
+				found[b] = true
+				*planFor(b, &sofar) = cs[b].best
+			}
+		}
+		e.set(func(s *Status) { s.Blocks = found; s.Plan = sofar })
 		allDone := true
 		for _, b := range blocks {
 			allDone = allDone && cs[b].done
@@ -696,6 +731,12 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 		}
 	}
 
+	if ctx.Err() != nil {
+		return
+	}
+	if stopped {
+		e.emit(i18n.T("ev.search_stopped"))
+	}
 	final := strategy.Plan{}
 	ok := map[string]bool{}
 	anyOK, allOK := false, true

@@ -319,7 +319,11 @@ func serviceRows(th *theme, s engine.Status) []serviceRow {
 		case !s.Enabled:
 			col = th.dis
 		case s.Phase == engine.PhaseSearching || s.Phase == engine.PhaseIdle:
-			col = th.warn
+			if s.Blocks[block] {
+				col = th.ok
+			} else {
+				col, strat = th.warn, "…"
+			}
 		case s.Blocks[block]:
 			col = th.ok
 		default:
