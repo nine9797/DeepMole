@@ -8,10 +8,13 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      SIGN: ${{ startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORG_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,9 +43,72 @@ jobs:
           $bin = Get-ChildItem zapret-src -Recurse -Filter winws.exe | Select-Object -First 1
           "ZAPRET_DIR=$($bin.Directory.Parent.FullName)" >> $env:GITHUB_ENV
 
-      - name: Build and pack
+      - name: Build
         shell: pwsh
-        run: .\release.ps1 -Version ${{ steps.ver.outputs.version }} -ZapretDir $env:ZAPRET_DIR
+        run: .\build.ps1 -Version ${{ steps.ver.outputs.version }}
+
+      - name: Upload unsigned executables
+        if: env.SIGN == 'true'
+        id: unsigned-exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe-${{ steps.ver.outputs.version }}
+          path: |
+            dist/deepmole.exe
+            dist/deepmole-cli.exe
+
+      - name: Sign executables
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-exe
+
+      - name: Use signed executables
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: Copy-Item signed-exe\*.exe dist\ -Force
+
+      - name: Pack
+        shell: pwsh
+        run: .\release.ps1 -Version ${{ steps.ver.outputs.version }} -ZapretDir $env:ZAPRET_DIR -SkipBuild
+
+      - name: Upload unsigned installer
+        if: env.SIGN == 'true'
+        id: unsigned-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup-${{ steps.ver.outputs.version }}
+          path: dist/*-setup.exe
+
+      - name: Sign installer
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-setup
+
+      - name: Use signed installer and refresh checksums
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item signed-setup\*-setup.exe dist\ -Force
+          $v = "${{ steps.ver.outputs.version }}"
+          $sums = Get-ChildItem dist -File | Where-Object { $_.Name -like "DeepMole-$v-*" } |
+              ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          [IO.File]::WriteAllText("dist\SHA256SUMS", (($sums -join "`n") + "`n"))
 
       - uses: actions/upload-artifact@v4
         with:
@@ -50,6 +116,7 @@ jobs:
           path: |
             dist/*.zip
             dist/*-setup.exe
+            dist/SHA256SUMS
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')

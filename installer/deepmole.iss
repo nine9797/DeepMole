@@ -28,8 +28,8 @@ CloseApplications=force
 RestartApplications=no
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "notice.en.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "notice.ru.txt"
 
 [CustomMessages]
 english.Autostart=Start DeepMole when you sign in to Windows
@@ -52,6 +52,7 @@ Source: "..\deepmole.example.json"; DestDir: "{app}"; DestName: "deepmole.json";
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.en.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\PRIVACY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ZapretDir}\*"; DestDir: "{app}\zapret"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

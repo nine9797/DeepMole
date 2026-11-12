@@ -1,0 +1,9 @@
+What DeepMole does on this computer
+
+Network requests. To find and maintain a bypass strategy the program downloads small pages from the probed services (YouTube, Discord, Telegram) and two control sites (ya.ru, vk.com). When the ISP's DNS returns no address for a site, the name is resolved through DoH or public DNS servers (Google, Cloudflare, Quad9, AdGuard). On start and once a day the program asks GitHub for the latest release. There is no telemetry and no user data is sent anywhere.
+
+System changes. The program runs winws with the WinDivert driver, changes the DNS servers of the active adapters and enables DoH when the ISP hijacks DNS, and adds an autostart task if you choose so. All changes are reverted on exit, when the bypass is disabled and when the program is uninstalled.
+
+Opting out. The "Secure DNS" switch in the window and the secure_dns, auto_update and telegram keys in deepmole.json.
+
+Full text: PRIVACY.md in the program folder and in the project repository.

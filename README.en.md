@@ -114,6 +114,16 @@ Tests:
 go test ./...
 ```
 
+## Code signing policy
+
+Release binaries are built only automatically in GitHub Actions from the source in this repository; manually built files never go into releases. Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+Team roles:
+
+- Authors (commit without additional review), reviewers and signing approvers: [nine9797](https://github.com/nine9797).
+
+Privacy: the program does not transfer any information to other networked systems except the requests listed in [PRIVACY.md](PRIVACY.md); all of them are needed for its function and can be disabled in the settings.
+
 ## Antivirus
 
 WinDivert may be flagged by antivirus software as a potentially unwanted program. It is a traffic interception driver; the bypass does not work without it. Add the folder to the exclusions.

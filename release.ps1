@@ -1,15 +1,18 @@
 param(
     [string]$Version = "dev",
-    [string]$ZapretDir = ""
+    [string]$ZapretDir = "",
+    [switch]$SkipBuild
 )
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-.\build.ps1 -Version $Version
+if (-not $SkipBuild) {
+    .\build.ps1 -Version $Version
+}
 
 $stage = Join-Path $env:TEMP ("deepmole-release-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force $stage | Out-Null
-Copy-Item dist/deepmole.exe, dist/deepmole-cli.exe, README.md, LICENSE $stage
+Copy-Item dist/deepmole.exe, dist/deepmole-cli.exe, README.md, README.en.md, LICENSE, PRIVACY.md $stage
 Copy-Item deepmole.example.json (Join-Path $stage "deepmole.json")
 
 $lite = "dist/DeepMole-$Version-windows-x64.zip"
