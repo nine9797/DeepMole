@@ -1,11 +1,15 @@
 package sdns
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf16"
 )
 
@@ -95,6 +99,34 @@ func TestDohActive(t *testing.T) {
 	if with != 0 {
 		t.Fatalf("plain DNS still used with DoH enabled: %d packets", with)
 	}
+}
+
+func TestResolvesLive(t *testing.T) {
+	if os.Getenv("DEEPMOLE_LIVE_DNS") == "" {
+		t.Skip("set DEEPMOLE_LIVE_DNS=1 and run as administrator")
+	}
+	look := func(label string) {
+		_, _ = exec.Command("ipconfig", "/flushdns").CombinedOutput()
+		for _, h := range []string{"ya.ru", "example.org"} {
+			start := time.Now()
+			ips, err := net.DefaultResolver.LookupIPAddr(context.Background(), h)
+			t.Logf("%s: go %s -> %v %v (%s)", label, h, ips, err, time.Since(start).Round(time.Millisecond))
+		}
+		out, _ := exec.Command("powershell", "-NoProfile", "-Command", "Resolve-DnsName ya.ru -Type A -DnsOnly | Select-Object -First 1 | Format-List").CombinedOutput()
+		t.Logf("%s: powershell %s", label, strings.TrimSpace(string(out)))
+	}
+	look("before")
+	path := filepath.Join(t.TempDir(), "dns.json")
+	for _, doh := range []bool{true, false} {
+		if err := Apply(Find("Google"), path, doh); err != nil {
+			t.Fatal(err)
+		}
+		look(fmt.Sprintf("google doh=%v", doh))
+		if err := Restore(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	look("restored")
 }
 
 func dump(t *testing.T) string {

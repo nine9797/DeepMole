@@ -70,8 +70,12 @@ func usable(ips []net.IP) []string {
 	return append(v4, v6...)
 }
 
+const systemLookupTimeout = 1500 * time.Millisecond
+
 func resolve(ctx context.Context, host string) ([]string, bool, error) {
-	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	sctx, cancel := context.WithTimeout(ctx, systemLookupTimeout)
+	addrs, err := net.DefaultResolver.LookupIPAddr(sctx, host)
+	cancel()
 	if err == nil {
 		ips := make([]net.IP, 0, len(addrs))
 		for _, a := range addrs {

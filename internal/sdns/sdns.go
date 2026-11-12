@@ -1,6 +1,7 @@
 package sdns
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -59,6 +61,23 @@ const (
 	tcpip6Key   = `SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces\`
 	dnscacheKey = `SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\`
 )
+
+func Verify(timeout time.Duration, hosts ...string) error {
+	var last error = errors.New("no hosts")
+	for _, h := range hosts {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		addrs, err := net.DefaultResolver.LookupIPAddr(ctx, h)
+		cancel()
+		if err == nil && len(addrs) > 0 {
+			return nil
+		}
+		if err == nil {
+			err = errors.New("no address for " + h)
+		}
+		last = err
+	}
+	return last
+}
 
 func Pending(path string) bool {
 	_, err := os.Stat(path)

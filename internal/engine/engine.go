@@ -284,22 +284,61 @@ func (e *Engine) dnsFix(host string) {
 		return
 	}
 	name, secure := probe.Fallback()
-	p := sdns.Find(name)
-	label := p.Name
-	if secure {
-		label += " DoH"
+	first := sdns.Find(name)
+	type option struct {
+		p   sdns.Provider
+		doh bool
 	}
-	e.emit(i18n.T("ev.dns_blocked", host, label))
-	if err := sdns.Apply(p, e.cfg.DNSBackup, secure); err != nil {
-		e.dnsOff = true
-		e.set(func(s *Status) { s.DNS = DNSBlocked })
-		e.emit(i18n.T("ev.dns_fail", errLine(err.Error())))
+	var options []option
+	add := func(p sdns.Provider, doh bool) {
+		for _, o := range options {
+			if o.p.Name == p.Name && o.doh == doh {
+				return
+			}
+		}
+		options = append(options, option{p, doh})
+	}
+	if secure {
+		add(first, true)
+	}
+	add(first, false)
+	for _, p := range sdns.Providers {
+		add(p, false)
+	}
+	e.emit(i18n.T("ev.dns_blocked", host, dnsLabel(first, secure)))
+	var lastErr error
+	for _, o := range options {
+		label := dnsLabel(o.p, o.doh)
+		if err := sdns.Apply(o.p, e.cfg.DNSBackup, o.doh); err != nil {
+			lastErr = err
+			continue
+		}
+		if err := sdns.Verify(4*time.Second, "ya.ru", "vk.com", "example.com"); err != nil {
+			lastErr = err
+			_ = sdns.Restore(e.cfg.DNSBackup)
+			e.emit(i18n.T("ev.dns_verify_fail", label))
+			continue
+		}
+		e.dns = label
+		probe.ResetCache()
+		e.set(func(s *Status) { s.DNS = label })
+		e.emit(i18n.T("ev.dns_on", label))
 		return
 	}
-	e.dns = label
+	e.dnsOff = true
 	probe.ResetCache()
-	e.set(func(s *Status) { s.DNS = label })
-	e.emit(i18n.T("ev.dns_on", label))
+	e.set(func(s *Status) { s.DNS = DNSBlocked })
+	if lastErr == nil {
+		lastErr = errors.New("no resolver")
+	}
+	e.emit(i18n.T("ev.dns_fail", errLine(lastErr.Error())))
+}
+
+func dnsLabel(p sdns.Provider, doh bool) string {
+	if doh {
+		return p.Name + " DoH"
+	}
+	return p.Name
 }
 
 func (e *Engine) dnsRestore() {
