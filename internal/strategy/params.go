@@ -17,6 +17,7 @@ type Params struct {
 	HostFake  string `json:"host_fake,omitempty"`
 	TTL       string `json:"ttl,omitempty"`
 	WSSize    string `json:"wssize,omitempty"`
+	Raw       bool   `json:"raw,omitempty"`
 }
 
 var fakeFiles = map[string]string{
@@ -34,12 +35,15 @@ var patternOvl = map[string]int{"google": 681, "max": 664, "4pda": 568, "sferum"
 var httpFakes = []string{"tls_clienthello_www_sferum_ru.bin", "tls_clienthello_max_ru.bin", "tls_clienthello_www_google_com.bin"}
 
 func (p Params) Key() string {
-	return fmt.Sprintf("%s|%s|%d|%s|%s|%d|%s|%d|%s|%s|%s",
-		p.Method, p.Fooling, p.BadseqInc, p.SplitPos, p.Pattern, p.SeqOvl, p.FakeTLS, p.Repeats, p.HostFake, p.TTL, p.WSSize)
+	return fmt.Sprintf("%s|%s|%d|%s|%s|%d|%s|%d|%s|%s|%s|%v",
+		p.Method, p.Fooling, p.BadseqInc, p.SplitPos, p.Pattern, p.SeqOvl, p.FakeTLS, p.Repeats, p.HostFake, p.TTL, p.WSSize, p.Raw)
 }
 
 func (p Params) Name() string {
 	parts := []string{strings.ReplaceAll(p.Method, ",", "+")}
+	if p.Raw {
+		parts = append(parts, "raw")
+	}
 	if p.Fooling != "" {
 		parts = append(parts, p.Fooling)
 	}
@@ -148,6 +152,9 @@ func (p Params) Render(paths Paths, withHTTP bool) []string {
 	}
 	if strings.Contains(p.Method, "fakedsplit") {
 		args = append(args, "--dpi-desync-fakedsplit-pattern=0x00")
+	}
+	if p.Raw {
+		return append(args, "--dpi-desync-any-protocol=1", "--dpi-desync-cutoff=n3")
 	}
 	if strings.Contains(p.Method, "hostfakesplit") && p.HostFake != "" {
 		mod := "host=" + p.HostFake

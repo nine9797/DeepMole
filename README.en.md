@@ -12,7 +12,7 @@ DeepMole removes the main pain of zapret: no more trying `general.bat`, `ALT`, `
 
 - Strategy search takes 10–40 seconds on a new network; a known strategy starts instantly.
 - 28 starting presets from the Flowseal bundle plus an in-house generator built on zapret parameters: desync methods, fooling, split-pos, seqovl patterns, fake TLS with modifiers, repeats, TTL and autottl, wssize. Together that is more than two hundred thousand unique recipes, explored one parameter at a time from the best partially working variant.
-- Independent search for YouTube and Discord: if one service needs one method and the other needs another, both are combined into a single winws run.
+- Independent search for YouTube, Discord and Telegram: if one service needs one method and the other needs another, both are combined into a single winws run.
 - DNS hijack protection: when the ISP's DNS returns no address for a site, probes resolve it through DoH or public DNS, and the program switches Windows to whichever resolver answers on this network (Google, Cloudflare, Quad9 or AdGuard, encrypted where possible). The previous DNS settings are restored on exit.
 - Per-network memory: the fingerprint is built from the gateway, its MAC and the SSID, so the strategy is saved and brought up immediately on the next start.
 - Watchdog: checks key sites every minute and re-searches when the strategy breaks or the network changes.
@@ -41,11 +41,12 @@ The program asks for administrator rights at start: the WinDivert driver needs t
   "max_candidates": 30,
   "secure_dns": "auto",
   "auto_update": "ask",
+  "telegram": "on",
   "language": ""
 }
 ```
 
-`game_filter` accepts `off`, `tcp`, `udp`, `all` and enables the bypass for ports 1024–65535, like Game Filter in the Flowseal bundle. `max_candidates` limits the variations tried after the presets: all 28 presets are always checked, then at most that many neighbouring recipes. `secure_dns` accepts `auto` and `off`; the same switch is in the window and the tray menu, and the choice made there is remembered. `auto_update` accepts `ask` (prompt when a new version appears), `auto` (install right away) and `off` (manual only, from the tray menu). `language` accepts `ru` or `en`; when empty, the Windows display language is used.
+`game_filter` accepts `off`, `tcp`, `udp`, `all` and enables the bypass for ports 1024–65535, like Game Filter in the Flowseal bundle. `max_candidates` limits the variations tried after the presets: all 28 presets are always checked, then at most that many neighbouring recipes. `secure_dns` accepts `auto` and `off`; the same switch is in the window and the tray menu, and the choice made there is remembered. `auto_update` accepts `ask` (prompt when a new version appears), `auto` (install right away) and `off` (manual only, from the tray menu). `telegram` accepts `on` and `off` and enables the third search block, see below. `language` accepts `ru` or `en`; when empty, the Windows display language is used.
 
 Stop other zapret instances, GoodbyeDPI and similar tools before running, otherwise the checks will give wrong results.
 
@@ -57,6 +58,18 @@ Stop other zapret instances, GoodbyeDPI and similar tools before running, otherw
 4. The YouTube and Discord blocks are searched independently and merged into a single winws command line.
 5. Every candidate is verified by downloading real pages and images rather than a single HEAD request, to catch connections that stall after the first kilobytes. Control sites that are not blocked tell "internet is down" apart from "the strategy broke".
 6. When the system DNS returns no address for a probed site, the probe resolves it by itself: first through DoH (Google, Cloudflare, AdGuard), then through plain DNS to public servers. The search therefore scores only the DPI bypass, not DNS failures. On the first such hijack the program switches the active network adapters to the resolver that answered and enables DoH in Windows when it is reachable on this network; the settings are restored on exit, when the bypass is disabled or when the switch is turned off.
+
+## Telegram
+
+Experimental, not yet verified on a real blocked network. Telegram does not use TLS with a server name: the clients speak MTProto to data-centre IPs, so hostlist-based strategies do not apply. DeepMole runs a separate search block for it:
+
+- probe: a real MTProto `req_pq_multi` request to two Telegram data centres over TCP 443; the block counts as working when both answer;
+- strategies: a preset set with `--dpi-desync-any-protocol=1` (fake with badseq, ts and md5sig, multisplit, multidisorder, fakedsplit, syndata) plus the same one-parameter variations as the other blocks;
+- filter: `--ipset` with the official Telegram ranges on TCP 80, 443 and 5222; `lists/ipset-telegram.txt` is generated automatically;
+- web domains (`web.telegram.org`, `telegram.org`, `t.me` and others) are added to the general block through `lists/list-telegram.txt`;
+- calls: fake packets on UDP 590–1400 and 3478 towards the Telegram ranges.
+
+What it does not solve: media slowdown after the first few hundred kilobytes and upload shaping, which the DPI applies inside an established MTProto connection; those need a proxy such as tg-ws-proxy. The block can be disabled with `telegram: "off"`.
 
 ## Window and tray
 

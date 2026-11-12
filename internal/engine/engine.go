@@ -29,6 +29,7 @@ type Config struct {
 	StatePath        string
 	SecureDNS        string
 	DNSBackup        string
+	Telegram         bool
 	Log              *log.Logger
 }
 
@@ -97,9 +98,15 @@ type Engine struct {
 	OnEvent  func(string)
 }
 
-var blocks = []string{probe.BlockGoogle, probe.BlockGeneral}
+var blocks = []string{probe.BlockGoogle, probe.BlockGeneral, probe.BlockTelegram}
 
-var blockTitle = map[string]string{probe.BlockGoogle: "YouTube", probe.BlockGeneral: "Discord"}
+var blockTitle = map[string]string{probe.BlockGoogle: "YouTube", probe.BlockGeneral: "Discord", probe.BlockTelegram: "Telegram"}
+
+var seeds = map[string][]strategy.Params{
+	probe.BlockGoogle:   strategy.Proven,
+	probe.BlockGeneral:  strategy.Proven,
+	probe.BlockTelegram: strategy.ProvenTelegram,
+}
 
 func New(cfg Config) (*Engine, error) {
 	bin := filepath.Join(cfg.ZapretDir, "bin") + string(filepath.Separator)
@@ -114,6 +121,17 @@ func New(cfg Config) (*Engine, error) {
 		}
 	}
 	ensureUserLists(lists)
+	targets := probe.Default()
+	if !cfg.Telegram {
+		blocks = []string{probe.BlockGoogle, probe.BlockGeneral}
+		var kept []probe.Target
+		for _, t := range targets {
+			if t.Block != probe.BlockTelegram {
+				kept = append(kept, t)
+			}
+		}
+		targets = kept
+	}
 	if cfg.Log == nil {
 		cfg.Log = log.Default()
 	}
@@ -137,7 +155,7 @@ func New(cfg Config) (*Engine, error) {
 		paths:   strategy.NewPaths(bin, lists),
 		run:     &runner.Runner{Exe: exe, Dir: bin},
 		st:      st,
-		targets: probe.Default(),
+		targets: targets,
 		log:     cfg.Log,
 		status:  Status{Phase: PhaseIdle, Blocks: map[string]bool{}, Enabled: true, SecureDNS: !dnsOff},
 		dnsOff:  dnsOff,
@@ -177,6 +195,8 @@ func ensureUserLists(lists string) {
 			_ = os.WriteFile(p, []byte(body), 0o644)
 		}
 	}
+	_ = os.WriteFile(lists+strategy.TelegramIPs, []byte(strings.Join(strategy.TelegramCIDR, "\n")+"\n"), 0o644)
+	_ = os.WriteFile(lists+strategy.TelegramList, []byte(strings.Join(strategy.TelegramDomains, "\n")+"\n"), 0o644)
 }
 
 func (e *Engine) Status() Status {
@@ -368,7 +388,11 @@ func (e *Engine) setup(ctx context.Context) {
 				e.emit(i18n.T("ev.internet"))
 				return
 			}
-			if sc[probe.BlockGoogle].Full() && sc[probe.BlockGeneral].Full() {
+			full := true
+			for _, b := range blocks {
+				full = full && sc[b].Full()
+			}
+			if full {
 				e.st.Touch(e.net.ID)
 				e.finish(entry.Plan, sc)
 				e.emit(i18n.T("ev.cached_ok"))
@@ -461,14 +485,35 @@ type cursor struct {
 
 const fallbackSeeds = 3
 
-func newCursor(seed *strategy.Params, skip func(strategy.Params) bool) *cursor {
+func newCursor(block string, seed *strategy.Params, skip func(strategy.Params) bool) *cursor {
 	c := &cursor{tried: map[string]bool{}, skip: skip}
 	if seed != nil && !seed.IsZero() {
 		c.queue = append(c.queue, *seed)
 	}
-	c.queue = append(c.queue, strategy.Proven...)
-	c.seeds = append(c.seeds, strategy.Proven[:fallbackSeeds]...)
+	list := seeds[block]
+	c.queue = append(c.queue, list...)
+	c.seeds = append(c.seeds, list[:fallbackSeeds]...)
 	return c
+}
+
+func (c *cursor) pick(block string) strategy.Params {
+	if c.done {
+		if c.best.IsZero() {
+			return seeds[block][0]
+		}
+		return c.best
+	}
+	return c.cur
+}
+
+func planFor(block string, plan *strategy.Plan) *strategy.Params {
+	switch block {
+	case probe.BlockGoogle:
+		return &plan.Google
+	case probe.BlockTelegram:
+		return &plan.Telegram
+	}
+	return &plan.General
 }
 
 func (c *cursor) next() bool {
@@ -507,16 +552,6 @@ func (c *cursor) next() bool {
 	}
 }
 
-func (c *cursor) pick() strategy.Params {
-	if c.done {
-		if c.best.IsZero() {
-			return strategy.Proven[0]
-		}
-		return c.best
-	}
-	return c.cur
-}
-
 func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 	e.failures = 0
 	e.set(func(s *Status) {
@@ -528,13 +563,14 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 	started := time.Now()
 
 	cs := map[string]*cursor{}
-	var sg, sn *strategy.Params
-	if seed != nil {
-		sg, sn = &seed.Google, &seed.General
-	}
 	skip := func(p strategy.Params) bool { return !p.Available(e.paths) }
-	cs[probe.BlockGoogle] = newCursor(sg, skip)
-	cs[probe.BlockGeneral] = newCursor(sn, skip)
+	for _, b := range blocks {
+		var s *strategy.Params
+		if seed != nil {
+			s = planFor(b, seed)
+		}
+		cs[b] = newCursor(b, s, skip)
+	}
 
 	limit := len(strategy.Proven) + e.cfg.MaxCandidates
 	if seed != nil {
@@ -567,10 +603,13 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 				break
 			}
 		}
-		plan := strategy.Plan{Google: cs[probe.BlockGoogle].pick(), General: cs[probe.BlockGeneral].pick()}
+		plan := strategy.Plan{}
+		for _, b := range blocks {
+			*planFor(b, &plan) = cs[b].pick(b)
+		}
 		attempts++
 		e.set(func(s *Status) { s.Progress = fmt.Sprintf("%d/%d", attempts, limit) })
-		e.log.Printf("[%d] google=[%s] general=[%s]", attempts, plan.Google.Name(), plan.General.Name())
+		e.log.Printf("[%d] %s", attempts, planText(plan))
 		if err := e.apply(plan); err != nil {
 			startFails++
 			e.emit(i18n.T("ev.cand_fail", attempts, errLine(err.Error())))
@@ -609,32 +648,37 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 			parts = append(parts, fmt.Sprintf("%s %d/%d %s [%s]", blockTitle[b], s.OK, s.Total, mark, c.cur.Name()))
 		}
 		e.emit(i18n.T("ev.cand", attempts, strings.Join(parts, "; ")))
-		if cs[probe.BlockGoogle].done && cs[probe.BlockGeneral].done {
+		allDone := true
+		for _, b := range blocks {
+			allDone = allDone && cs[b].done
+		}
+		if allDone {
 			break
 		}
 	}
 
 	final := strategy.Plan{}
 	ok := map[string]bool{}
+	anyOK, allOK := false, true
+	var summary []string
 	for _, b := range blocks {
 		c := cs[b]
 		p := c.best
 		if p.IsZero() {
-			p = strategy.Proven[0]
+			p = seeds[b][0]
 		}
 		ok[b] = c.score >= 1
-		if b == probe.BlockGoogle {
-			final.Google = p
-		} else {
-			final.General = p
-		}
+		anyOK = anyOK || ok[b]
+		allOK = allOK && ok[b]
+		*planFor(b, &final) = p
+		summary = append(summary, blockTitle[b]+": "+yesNo(ok[b]))
 	}
-	if e.applied == nil || e.applied.Google.Key() != final.Google.Key() || e.applied.General.Key() != final.General.Key() {
+	if e.applied == nil || planText(*e.applied) != planText(final) {
 		if err := e.apply(final); err != nil {
 			e.emit(i18n.T("ev.final_fail", errLine(err.Error())))
 		}
 	}
-	if ok[probe.BlockGoogle] || ok[probe.BlockGeneral] {
+	if anyOK {
 		e.st.Put(e.net.ID, state.Entry{Name: e.net.Name, Plan: final, Saved: time.Now(), LastOK: time.Now()})
 	}
 	e.set(func(s *Status) {
@@ -642,9 +686,9 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 		s.Blocks = ok
 		s.Progress = ""
 		switch {
-		case ok[probe.BlockGoogle] && ok[probe.BlockGeneral]:
+		case allOK:
 			s.Phase = PhaseRunning
-		case ok[probe.BlockGoogle] || ok[probe.BlockGeneral]:
+		case anyOK:
 			s.Phase = PhasePartial
 			s.Message = partialText(ok)
 		default:
@@ -652,7 +696,15 @@ func (e *Engine) search(ctx context.Context, seed *strategy.Plan) {
 			s.Message = i18n.T("msg.not_found")
 		}
 	})
-	e.emit(i18n.T("ev.done", time.Since(started).Round(time.Second), attempts, yesNo(ok[probe.BlockGoogle]), yesNo(ok[probe.BlockGeneral])))
+	e.emit(i18n.T("ev.done", time.Since(started).Round(time.Second), attempts, strings.Join(summary, ", ")))
+}
+
+func planText(plan strategy.Plan) string {
+	var parts []string
+	for _, b := range blocks {
+		parts = append(parts, b+"=["+planFor(b, &plan).Name()+"]")
+	}
+	return strings.Join(parts, " ")
 }
 
 func yesNo(ok bool) string {

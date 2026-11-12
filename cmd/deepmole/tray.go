@@ -102,7 +102,7 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 			},
 			CustomWidget{AssignTo: &st.cw, Paint: st.paint, MinSize: Size{Height: 30}, MaxSize: Size{Height: 30}},
 			Label{AssignTo: &lNet, Text: i18n.T("ui.network", "…"), TextColor: wc(th.muted)},
-			CustomWidget{AssignTo: &svc.cw, Paint: svc.paint, MinSize: Size{Height: 114}, MaxSize: Size{Height: 114}},
+			CustomWidget{AssignTo: &svc.cw, Paint: svc.paint, MinSize: Size{Height: 150}, MaxSize: Size{Height: 150}},
 			TextEdit{AssignTo: &events, ReadOnly: true, VScroll: true, StretchFactor: 1, Background: SolidColorBrush{Color: wc(th.field)}, TextColor: wc(th.muted), Font: Font{Family: "Consolas", PointSize: 9}},
 			Composite{
 				Layout:  HBox{MarginsZero: true, Spacing: 8},
@@ -268,13 +268,13 @@ func runTray(ctx context.Context, cancel context.CancelFunc, eng *engine.Engine,
 	if demo {
 		eng.OnChange(engine.Status{
 			Phase: engine.PhaseRunning, Network: "Home_5G", Enabled: true, DNS: "Google DoH", SecureDNS: true,
-			Plan:   strategy.Plan{Google: strategy.Proven[3], General: strategy.Proven[1]},
-			Blocks: map[string]bool{probe.BlockGoogle: true, probe.BlockGeneral: true},
+			Plan:   strategy.Plan{Google: strategy.Proven[3], General: strategy.Proven[1], Telegram: strategy.ProvenTelegram[0]},
+			Blocks: map[string]bool{probe.BlockGoogle: true, probe.BlockGeneral: true, probe.BlockTelegram: true},
 		})
 		eng.OnEvent(i18n.T("ev.net_new", "Home_5G"))
-		eng.OnEvent(i18n.T("ev.cand", 1, "YouTube 2/3 ✗ [multisplit pos=1 ovl=568/4pda]; Discord 3/3 ✓ [multisplit pos=1 ovl=568/4pda]"))
+		eng.OnEvent(i18n.T("ev.cand", 1, "YouTube 2/3 ✗ [multisplit pos=1 ovl=568/4pda]; Discord 3/3 ✓ [multisplit pos=1 ovl=568/4pda]; Telegram 2/2 ✓ [fake raw badseq r6]"))
 		eng.OnEvent(i18n.T("ev.cand", 2, "YouTube 3/3 ✓ [fake+multidisorder badseq pos=1,midsld tls=zero+mod r11]"))
-		eng.OnEvent(i18n.T("ev.done", "6s", 2, i18n.T("works"), i18n.T("works")))
+		eng.OnEvent(i18n.T("ev.done", "6s", 2, "YouTube: "+i18n.T("works")+", Discord: "+i18n.T("works")+", Telegram: "+i18n.T("works")))
 	} else {
 		go eng.Run(ctx)
 	}

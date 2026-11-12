@@ -33,6 +33,7 @@ type fileConfig struct {
 	MaxCandidates   int    `json:"max_candidates"`
 	SecureDNS       string `json:"secure_dns"`
 	AutoUpdate      string `json:"auto_update"`
+	Telegram        string `json:"telegram"`
 	Language        string `json:"language"`
 }
 
@@ -94,6 +95,7 @@ func main() {
 		StatePath:        filepath.Join(dataDir, "deepmole-state.json"),
 		SecureDNS:        fc.SecureDNS,
 		DNSBackup:        filepath.Join(dataDir, "deepmole-dns.json"),
+		Telegram:         !strings.EqualFold(fc.Telegram, "off"),
 		Log:              logger,
 	}
 

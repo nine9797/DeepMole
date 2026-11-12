@@ -7,7 +7,7 @@ import (
 )
 
 func TestCursorPresetsThenNeighbors(t *testing.T) {
-	c := newCursor(nil, nil)
+	c := newCursor("google", nil, nil)
 	for i := range strategy.Proven {
 		if !c.next() {
 			t.Fatalf("stopped at preset %d", i)
@@ -39,7 +39,7 @@ func TestCursorPresetsThenNeighbors(t *testing.T) {
 }
 
 func TestCursorSeedsWithoutBest(t *testing.T) {
-	c := newCursor(nil, nil)
+	c := newCursor("google", nil, nil)
 	for c.next() && !c.deep {
 	}
 	if !c.deep {
@@ -59,7 +59,7 @@ func TestCursorSeedsWithoutBest(t *testing.T) {
 
 func TestCursorSeedFirst(t *testing.T) {
 	seed := strategy.Proven[5]
-	c := newCursor(&seed, nil)
+	c := newCursor("google", &seed, nil)
 	if !c.next() || c.cur.Key() != seed.Key() {
 		t.Fatal("saved strategy must be tried first")
 	}

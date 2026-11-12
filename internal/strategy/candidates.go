@@ -31,8 +31,23 @@ var Proven = []Params{
 	{Method: "syndata,multidisorder"},
 }
 
+var ProvenTelegram = []Params{
+	{Method: "fake", Fooling: "badseq", Repeats: 6, Raw: true},
+	{Method: "fake", Fooling: "ts", Repeats: 6, TTL: "autottl=2", Raw: true},
+	{Method: "fake", Fooling: "md5sig", Repeats: 6, Raw: true},
+	{Method: "multisplit", SplitPos: "1", Raw: true},
+	{Method: "multidisorder", SplitPos: "1", Raw: true},
+	{Method: "fake,multisplit", Fooling: "badseq", SplitPos: "1", Repeats: 6, Raw: true},
+	{Method: "fake,multidisorder", Fooling: "badseq", SplitPos: "1", Repeats: 6, Raw: true},
+	{Method: "fake,fakedsplit", Fooling: "badseq", SplitPos: "1", Repeats: 6, Raw: true},
+	{Method: "fake,fakeddisorder", Fooling: "ts", SplitPos: "1", Repeats: 6, Raw: true},
+	{Method: "fake", Fooling: "badseq", Repeats: 11, WSSize: "1:6", Raw: true},
+	{Method: "syndata", Raw: true},
+}
+
 var (
 	methods  = []string{"fake,multisplit", "fake,multidisorder", "fake,fakedsplit", "fake,fakeddisorder", "multisplit", "multidisorder", "fake"}
+	rawPos   = []string{"1", "2", "10"}
 	foolings = []string{"ts", "badseq", "ts,md5sig", "md5sig"}
 	splitPos = []string{"1", "2", "1,midsld", "2,sniext+1", "midsld", "10"}
 	patterns = []string{"google", "max", "4pda", "sferum", "stun2"}
@@ -63,20 +78,26 @@ func Neighbors(p Params) []Params {
 			}
 			add(q)
 		}
-		for _, t := range fakeTLS {
-			q := p
-			q.FakeTLS = t
-			add(q)
+		if !p.Raw {
+			for _, t := range fakeTLS {
+				q := p
+				q.FakeTLS = t
+				add(q)
+			}
 		}
 	}
 	if p.hasSplit() {
-		for _, s := range splitPos {
+		pos := splitPos
+		if p.Raw {
+			pos = rawPos
+		}
+		for _, s := range pos {
 			q := p
 			q.SplitPos = s
 			add(q)
 		}
 	}
-	if p.SeqOvl > 0 {
+	if p.SeqOvl > 0 && !p.Raw {
 		for _, pt := range patterns {
 			q := p
 			q.Pattern = pt
@@ -92,7 +113,7 @@ func Neighbors(p Params) []Params {
 			if q.Fooling == "" {
 				q.Fooling = "ts"
 			}
-			if q.FakeTLS == "" {
+			if q.FakeTLS == "" && !q.Raw {
 				q.FakeTLS = "stun+google"
 			}
 			if q.Repeats == 0 {
@@ -108,7 +129,7 @@ func Neighbors(p Params) []Params {
 		} else {
 			q.SplitPos = ""
 		}
-		if m == "multisplit" || m == "fake,multisplit" {
+		if (m == "multisplit" || m == "fake,multisplit") && !q.Raw {
 			if q.Pattern == "" {
 				q.Pattern = "google"
 				q.SeqOvl = patternOvl["google"]

@@ -6,5 +6,6 @@
   "max_candidates": 30,
   "secure_dns": "auto",
   "auto_update": "ask",
+  "telegram": "on",
   "language": ""
 }

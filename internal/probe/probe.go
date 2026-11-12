@@ -16,6 +16,7 @@ type Target struct {
 	Block    string `json:"block"`
 	URL      string `json:"url"`
 	MinBytes int    `json:"min_bytes"`
+	Kind     string `json:"kind,omitempty"`
 }
 
 type Result struct {
@@ -35,21 +36,24 @@ func (r Result) Host() string {
 }
 
 const (
-	BlockGoogle  = "google"
-	BlockGeneral = "general"
-	BlockControl = "control"
+	BlockGoogle   = "google"
+	BlockGeneral  = "general"
+	BlockTelegram = "telegram"
+	BlockControl  = "control"
 )
 
 func Default() []Target {
 	return []Target{
-		{BlockGoogle, "https://www.youtube.com/", 50000},
-		{BlockGoogle, "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", 5000},
-		{BlockGoogle, "https://redirector.googlevideo.com/", 0},
-		{BlockGeneral, "https://discord.com/", 2000},
-		{BlockGeneral, "https://cdn.discordapp.com/embed/avatars/0.png", 500},
-		{BlockGeneral, "https://gateway.discord.gg/", 0},
-		{BlockControl, "https://ya.ru/", 0},
-		{BlockControl, "https://vk.com/", 0},
+		{Block: BlockGoogle, URL: "https://www.youtube.com/", MinBytes: 50000},
+		{Block: BlockGoogle, URL: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", MinBytes: 5000},
+		{Block: BlockGoogle, URL: "https://redirector.googlevideo.com/"},
+		{Block: BlockGeneral, URL: "https://discord.com/", MinBytes: 2000},
+		{Block: BlockGeneral, URL: "https://cdn.discordapp.com/embed/avatars/0.png", MinBytes: 500},
+		{Block: BlockGeneral, URL: "https://gateway.discord.gg/"},
+		{Block: BlockTelegram, URL: "mtproto://149.154.167.51:443", Kind: KindMTProto},
+		{Block: BlockTelegram, URL: "mtproto://149.154.167.91:443", Kind: KindMTProto},
+		{Block: BlockControl, URL: "https://ya.ru/"},
+		{Block: BlockControl, URL: "https://vk.com/"},
 	}
 }
 
@@ -97,6 +101,18 @@ func Check(ctx context.Context, t Target, timeout time.Duration) Result {
 	res := Result{Target: t}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	if t.Kind == KindMTProto {
+		n, err := checkMTProto(ctx, t.URL, timeout)
+		res.Bytes = n
+		res.Millis = time.Since(start).Milliseconds()
+		if err != nil {
+			res.Err = classify(err)
+		} else {
+			res.OK = true
+		}
+		return res
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.URL, nil)
 	if err != nil {

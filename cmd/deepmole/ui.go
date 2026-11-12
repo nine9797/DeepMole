@@ -339,9 +339,12 @@ func serviceRows(th *theme, s engine.Status) []serviceRow {
 	case s.DNS != "":
 		dns.strat, dns.color = i18n.T("dns.secure", s.DNS), th.ok
 	}
-	return []serviceRow{
+	rows := []serviceRow{
 		mk("YouTube", probe.BlockGoogle, s.Plan.Google.Name()),
 		mk("Discord", probe.BlockGeneral, s.Plan.General.Name()),
-		dns,
 	}
+	if _, ok := s.Blocks[probe.BlockTelegram]; ok || !s.Plan.Telegram.IsZero() {
+		rows = append(rows, mk("Telegram", probe.BlockTelegram, s.Plan.Telegram.Name()))
+	}
+	return append(rows, dns)
 }
